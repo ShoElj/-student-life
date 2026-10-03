@@ -216,6 +216,17 @@ export function createLifeScene(Phaser: PhaserModule, getClient: () => LifeClien
           .text(d.x + d.width / 2, d.y + d.height / 2, `🏫 ${school}`, { fontFamily: FONT, fontSize: "14px", fontStyle: "bold", color: "#ffffff" })
           .setOrigin(0.5)
           .setDepth(1);
+      } else if (d.kind === "track") {
+        g.fillStyle(hex(d.color), 1).fillRoundedRect(d.x, d.y, d.width, d.height, 8);
+        g.lineStyle(2, 0xffffff, 0.9);
+        for (let x = d.x + d.width / 4; x < d.x + d.width; x += d.width / 4) g.lineBetween(x, d.y + 6, x, d.y + d.height - 6);
+        g.lineStyle(4, 0xffffff, 1).lineBetween(d.x + 4, d.y + 14, d.x + d.width - 4, d.y + 14);
+        this.add.text(d.x + d.width / 2, d.y + d.height - 18, "100 m", { fontFamily: FONT, fontSize: "13px", fontStyle: "bold", color: "#ffffff" }).setOrigin(0.5).setDepth(1);
+      } else if (d.kind === "chalk") {
+        const cx = d.x + d.width / 2;
+        const cy = d.y + d.height / 2;
+        g.lineStyle(3, 0xffffff, 0.9).strokeCircle(cx, cy, d.width / 2);
+        g.lineStyle(2, 0xffffff, 0.7).strokeCircle(cx, cy, d.width / 4);
       } else if (d.kind === "notice") {
         g.fillStyle(hex(d.color), 1).fillRect(d.x, d.y, d.width, d.height);
         g.fillStyle(0xfef3c7, 1).fillRect(d.x + 6, d.y + 2, 20, 6).fillRect(d.x + 34, d.y + 2, 20, 6).fillRect(d.x + 62, d.y + 2, 20, 6);

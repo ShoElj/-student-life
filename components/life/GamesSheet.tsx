@@ -5,6 +5,7 @@ import type { AyoState } from "@/lib/life/games/ayo";
 import { games, replay, type GameKind } from "@/lib/life/games";
 import { winningLine, type TicTacToeState } from "@/lib/life/games/tictactoe";
 import { getLifeClient } from "@/lib/life/client";
+import { isSportKind, sports } from "@/lib/life/sports";
 import { cn } from "@/lib/utils";
 import { useLifeStore, type GameSession } from "@/store/lifeStore";
 import { LookAvatar } from "./LookPreview";
@@ -245,7 +246,8 @@ export function GameInviteCard() {
     <div className="absolute inset-x-0 top-[calc(max(0.5rem,env(safe-area-inset-top))+9.5rem)] z-40 flex justify-center px-4" role="alertdialog" aria-labelledby="invite-title">
       <div className="animate-pop w-full max-w-sm rounded-3xl border-[3px] border-white bg-sun p-4 text-center shadow-2xl">
         <p id="invite-title" className="text-lg font-black text-ink">
-          🎲 {invite.fromName} wants to play {games[invite.kind].name}!
+          {isSportKind(invite.kind) ? sports[invite.kind].emoji : "🎲"} {invite.fromName} wants to play{" "}
+          {isSportKind(invite.kind) ? sports[invite.kind].name : games[invite.kind].name}!
         </p>
         <div className="mt-3 grid grid-cols-2 gap-2">
           <button type="button" onClick={() => client?.declineInvite()} className="min-h-12 rounded-2xl bg-white/70 text-base font-bold text-ink">

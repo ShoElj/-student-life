@@ -184,6 +184,7 @@ export const lifeFurniture: Obstacle[] = [
   solid("games_table_2", "Games table", 800, 1340, 60, 40, "#0f766e", "🌰"),
   solid("tv", "TV", 1100, 1270, 100, 14, "#111827", "📺"),
   solid("speakers", "Music corner", 1176, 1480, 30, 40, "#7c3aed", "🎧"),
+  solid("pingpong", "Table tennis table", 930, 1430, 110, 60, "#1d4ed8", "🏓"),
   solid("sofa", "Sofa", 660, 1575, 130, 30, "#7c3aed", "🛋️"),
   // Sick bay.
   solid("bed_1", "Bed", 1300, 1300, 50, 80, "#e2e8f0", "🛏️"),
@@ -204,7 +205,7 @@ export const lifeGeometry: MapGeometry = { zones: lifeZones, solids: lifeFurnitu
 
 /** Things drawn on the map that do not block movement. */
 export type Decoration = Rect & {
-  kind: "goal" | "pitch" | "board" | "rug" | "flag" | "crops" | "court" | "gate" | "sign" | "notice";
+  kind: "goal" | "pitch" | "board" | "rug" | "flag" | "crops" | "court" | "gate" | "sign" | "notice" | "track" | "chalk";
   color: string;
 };
 
@@ -226,8 +227,9 @@ export const lifeDecorations: Decoration[] = [
   // Chalkboards.
   { kind: "board", x: 44, y: 740, width: 8, height: 160, color: "#14532d" },
   { kind: "board", x: 444, y: 740, width: 8, height: 160, color: "#14532d" },
-  // Common room rug.
-  { kind: "rug", x: 900, y: 1420, width: 180, height: 120, color: "#c4b5fd" },
+  // Front Yard running track and the ten-ten circle.
+  { kind: "track", x: 2420, y: 330, width: 100, height: 400, color: "#dc6b4a" },
+  { kind: "chalk", x: 2470, y: 1020, width: 120, height: 120, color: "#ffffff" },
   // School gate and the school's name sign.
   { kind: "gate", x: 2650, y: 1400, width: 12, height: 160, color: "#1e3a8a" },
   { kind: "sign", x: 2420, y: 1590, width: 220, height: 26, color: "#1e3a8a" },
@@ -274,6 +276,7 @@ export const lifeSpots: Spot[] = [
   { id: "tv", activity: "watch_tv", x: 1150, y: 1340, radius: 60, label: "TV corner" },
   { id: "music_corner", activity: "listen_music", x: 1135, y: 1500, radius: 50, label: "Music corner" },
   { id: "rest", activity: "rest", x: 725, y: 1545, radius: 60, label: "Sofa" },
+  { id: "tabletennis", activity: "play_tabletennis", x: 985, y: 1545, radius: 55, label: "Table tennis table" },
   // Sick bay, shop, bank.
   { id: "sickbay", activity: "rest_sickbay", x: 1420, y: 1420, radius: 80, label: "Sick bay beds" },
   { id: "shop", activity: "school_shop", x: 1780, y: 1500, radius: 80, label: "School Shop" },
@@ -281,6 +284,8 @@ export const lifeSpots: Spot[] = [
   // Front yard.
   { id: "bus_stop", activity: "go_home", x: 2520, y: 170, radius: 70, label: "Bus stop" },
   { id: "tuck_shop", activity: "tuck_snack", x: 2505, y: 825, radius: 55, label: "Tuck shop" },
+  { id: "race", activity: "run_race", x: 2470, y: 530, radius: 70, label: "Running track" },
+  { id: "tenten", activity: "play_tenten", x: 2530, y: 1080, radius: 65, label: "Ten-ten circle" },
 ];
 
 /** Where students arrive: just inside the school gate. */

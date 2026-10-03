@@ -3,6 +3,7 @@ import type { Look } from "@/lib/game/art/students";
 import type { PeriodKind } from "@/lib/life/clock";
 import type { ChatMessage } from "@/lib/life/api";
 import type { GameKind, Player } from "@/lib/life/games";
+import type { SportKind } from "@/lib/life/sports";
 import type { Needs, ReportCard } from "@/lib/life/types";
 
 export type LifeHud = {
@@ -26,7 +27,7 @@ export type LifeHud = {
   secondsLeftInPeriod: number;
   goals: { id: string; text: string; value: number; target: number; done: boolean; reward: number }[];
   activity: { key: string; label: string; emoji: string; progress: number } | null;
-  nearSpot: { id: string; label: string; emoji: string; durationSec: number; cost: number; pay: number; opens: "games" | "shop" | "bank" | null; blocker: string | null } | null;
+  nearSpot: { id: string; label: string; emoji: string; durationSec: number; cost: number; pay: number; opens: "games" | "sports" | "shop" | "bank" | null; blocker: string | null } | null;
   nearClassmate: { id: string; name: string } | null;
   onlineCount: number;
 };
@@ -46,9 +47,22 @@ export type GameSession = {
 };
 
 /** A screen the client asks the game UI to open. */
-export type SheetRequest = "games" | "shop" | "bank";
+export type SheetRequest = "games" | "sports" | "shop" | "bank";
 
-export type GameInvite = { id: string; kind: GameKind; fromId: string; fromName: string; at: number };
+/** A sports match: both players play the same seeded challenge and compare scores. */
+export type SportMatch = {
+  id: string;
+  kind: SportKind;
+  seed: number;
+  opponent: { kind: "computer" } | { kind: "classmate"; id: string; name: string };
+  status: "waiting" | "ready" | "playing" | "finished" | "over" | "cancelled";
+  myScore?: number;
+  theirScore?: number;
+  result?: "win" | "lose" | "draw";
+  note?: string;
+};
+
+export type GameInvite = { id: string; kind: GameKind | SportKind; seed?: number; fromId: string; fromName: string; at: number };
 
 export type LifeToast = { id: number; text: string; tone: "good" | "bad" | "info"; at: number };
 
@@ -70,6 +84,9 @@ type LifeStore = {
   /** The conversation open on screen, if any (no pop-ups for it). */
   openThread: string | null;
   game: GameSession | null;
+  match: SportMatch | null;
+  /** The sport whose venue the student is at (for the sports sheet). */
+  sportVenue: SportKind | null;
   invite: GameInvite | null;
   /** Asks the game screen to open a sheet (e.g. the games table was used). */
   sheetRequest: SheetRequest | null;
@@ -94,6 +111,8 @@ const initial = {
   muted: [] as string[],
   openThread: null as string | null,
   game: null as GameSession | null,
+  match: null as SportMatch | null,
+  sportVenue: null as SportKind | null,
   invite: null as GameInvite | null,
   sheetRequest: null as SheetRequest | null,
 };

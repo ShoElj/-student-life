@@ -19,9 +19,10 @@ import { GameInviteCard, GamesSheet } from "./GamesSheet";
 import { LookAvatar } from "./LookPreview";
 import { WalletSheet } from "./WalletSheet";
 import { MapSheet } from "./MapSheet";
+import { SportsSheet } from "./SportsSheet";
 import { WardrobeSheet } from "./WardrobeSheet";
 
-type Sheet = { kind: "goals" } | { kind: "wallet" } | { kind: "chat"; thread?: string } | { kind: "games" } | { kind: "map" } | { kind: "wardrobe" } | { kind: "people" } | { kind: "menu" } | { kind: "talk"; id: string } | null;
+type Sheet = { kind: "goals" } | { kind: "wallet" } | { kind: "chat"; thread?: string } | { kind: "games" } | { kind: "sports" } | { kind: "map" } | { kind: "wardrobe" } | { kind: "people" } | { kind: "menu" } | { kind: "talk"; id: string } | null;
 
 const NEEDS: { key: NeedKey; emoji: string; label: string }[] = [
   { key: "energy", emoji: "⚡", label: "Energy" },
@@ -171,7 +172,7 @@ function Actions({ hud, onTalk, touch }: { hud: LifeHud; onTalk: (id: string) =>
           </span>
           <span className="text-xs font-bold opacity-80">
             {spot.blocker ??
-              (spot.opens === "games" ? "Tic-tac-toe & Ayọ" : spot.opens === "shop" ? "Buy new clothes" : spot.opens === "bank" ? "Save or take out money" : null) ??
+              (spot.opens === "games" ? "Tic-tac-toe & Ayọ" : spot.opens === "sports" ? "Play a match" : spot.opens === "shop" ? "Buy new clothes" : spot.opens === "bank" ? "Save or take out money" : null) ??
             `${spot.durationSec}s${spot.cost ? ` · ${formatMoney(spot.cost)}` : ""}${spot.pay ? ` · earn ${formatMoney(spot.pay)}` : ""}`}
           </span>
         </button>
@@ -462,12 +463,14 @@ export function LifeGame() {
   const talk = useCallback((id: string) => setSheet({ kind: "talk", id }), []);
   const sheetRequest = useLifeStore((s) => s.sheetRequest);
   const game = useLifeStore((s) => s.game);
+  const match = useLifeStore((s) => s.match);
 
   // The client asks for the games sheet when the games table is used or an invite is accepted.
   useEffect(() => {
     if (!sheetRequest) return;
     useLifeStore.getState().patch({ sheetRequest: null });
-    const next: Sheet = sheetRequest === "shop" ? { kind: "wardrobe" } : sheetRequest === "bank" ? { kind: "wallet" } : { kind: "games" };
+    const next: Sheet =
+      sheetRequest === "shop" ? { kind: "wardrobe" } : sheetRequest === "bank" ? { kind: "wallet" } : sheetRequest === "sports" ? { kind: "sports" } : { kind: "games" };
     queueMicrotask(() => setSheet(next));
   }, [sheetRequest]);
 
@@ -517,6 +520,20 @@ export function LifeGame() {
         >
           🎲 Back to your game
         </button>
+      )}
+      {match && sheet?.kind !== "sports" && match.status !== "over" && match.status !== "cancelled" && (
+        <button
+          type="button"
+          onClick={() => setSheet({ kind: "sports" })}
+          className="animate-pop absolute top-[calc(max(0.5rem,env(safe-area-inset-top))+12.5rem)] left-1/2 z-20 min-h-11 -translate-x-1/2 rounded-full border-[3px] border-white bg-leaf px-4 text-sm font-black text-white shadow-lg"
+        >
+          🏅 Back to your match
+        </button>
+      )}
+      {sheet?.kind === "sports" && (
+        <BottomSheet title="Sports" onClose={close}>
+          <SportsSheet />
+        </BottomSheet>
       )}
       {sheet?.kind === "games" && (
         <BottomSheet title="Games table" onClose={close}>

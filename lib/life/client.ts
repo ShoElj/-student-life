@@ -8,7 +8,7 @@ import { inputVector, playerInput, resetInput } from "@/lib/game/input";
 import { createTransport, type RoomTransport } from "@/lib/realtime/channels";
 import type { RoomMode } from "@/lib/session";
 import { playSound, vibrate } from "@/lib/sound";
-import { useLifeStore, type GameSession } from "@/store/lifeStore";
+import { useLifeStore, type GameSession, type SportMatch } from "@/store/lifeStore";
 import { generateId } from "@/lib/utils";
 import { activities, getActivity, jobKeys } from "./activities";
 import { getLifeApi, LifeApiError, MAX_MESSAGE_LENGTH, type ChatMessage, type LifeApi } from "./api";
@@ -16,12 +16,15 @@ import { getSchoolTime } from "./clock";
 import { GREETINGS, SOCIAL_RULES } from "./friendship";
 import { games, isGameKind, replay, type GameKind } from "./games";
 import { getGoal } from "./goals";
+import { compareScores, computerScore, isSportKind, seededRandom, sports, type SportKind } from "./sports";
 import { formatMoney, LEGACY_COIN_VALUE, PROFILE_VERSION } from "./money";
 import {
   activityBlocker,
   buyOrWear,
   createSim,
   finishGame,
+  finishSport,
+  sportBlocker,
   goalProgress,
   gradeLetter,
   level,
@@ -83,9 +86,13 @@ type ChatPayload = { id: number; to: string | null; body: string; at: number; fr
 type GamePayload = {
   to: string;
   gameId: string;
-  action: "invite" | "accept" | "decline" | "move" | "quit";
-  game: GameKind;
+  action: "invite" | "accept" | "decline" | "move" | "quit" | "score";
+  /** A table game or a sport. */
+  game: GameKind | SportKind;
   move?: number;
+  /** Sports: the shared random seed (on invite) and a finished score. */
+  seed?: number;
+  score?: number;
   /** Index of the move in the game, so moves are applied once and in order. */
   seq?: number;
 };
@@ -279,6 +286,7 @@ export class LifeClient {
   dispose(): void {
     if (this.disposed) return;
     this.leaveGame();
+    this.leaveSport();
     this.disposed = true;
     this.send("life_leave", {});
     for (const c of this.cleanups) c();
@@ -378,13 +386,6 @@ export class LifeClient {
             }[e.need],
             "bad",
           );
-          break;
-        case "played_with":
-          for (const id of e.classmateIds) {
-            // Only one of the two players records it, so friendship isn't counted twice.
-            if (this.session.studentId < id) void this.addFriendship(id, SOCIAL_RULES.footballTogether.friendship);
-          }
-          store.toast(`⚽ Played with ${e.classmateIds.map((id) => this.nameOf(id)).join(", ")}!`, "good");
           break;
         case "report_card":
           playSound("final-bell");
@@ -502,10 +503,11 @@ export class LifeClient {
     const def = getActivity(spot.activity);
     if (def?.opens && !this.sim.activity) {
       const blocker = activityBlocker(this.sim, def);
-      if (blocker) useLifeStore.getState().toast(blocker, "bad");
+      const tired = def.opens === "sports" ? sportBlocker(this.sim) : null;
+      if (blocker || tired) useLifeStore.getState().toast((blocker ?? tired)!, "bad");
       else {
         playSound("button-click");
-        useLifeStore.getState().patch({ sheetRequest: def.opens });
+        useLifeStore.getState().patch({ sheetRequest: def.opens, sportVenue: def.sport ?? null });
       }
       return;
     }
@@ -618,6 +620,20 @@ export class LifeClient {
       return;
     }
     this.leaveGame();
+    this.leaveSport();
+    if (isSportKind(invite.kind)) {
+      this.send("life_game", { to: invite.fromId, gameId: invite.id, action: "accept", game: invite.kind });
+      this.setMatch({
+        id: invite.id,
+        kind: invite.kind,
+        seed: invite.seed ?? 1,
+        opponent: { kind: "classmate", id: invite.fromId, name: invite.fromName },
+        status: "ready",
+      });
+      store.patch({ sheetRequest: "sports", sportVenue: invite.kind });
+      return;
+    }
+    if (!isGameKind(invite.kind)) return;
     this.send("life_game", { to: invite.fromId, gameId: invite.id, action: "accept", game: invite.kind });
     this.setGame({
       id: invite.id,
@@ -707,7 +723,7 @@ export class LifeClient {
       result === "lose" ? "info" : "good",
     );
     if (game.opponent.kind === "classmate" && this.session.studentId < game.opponent.id) {
-      void this.addFriendship(game.opponent.id, SOCIAL_RULES.footballTogether.friendship);
+      void this.addFriendship(game.opponent.id, SOCIAL_RULES.playTogether.friendship);
     }
     void this.save(true);
   }
@@ -717,7 +733,11 @@ export class LifeClient {
     const game = store.game;
     const name = this.nameOf(fromId);
     if (p.action === "invite") {
-      if (game && (game.status === "playing" || game.status === "waiting")) {
+      const match = store.match;
+      const busy =
+        (game && (game.status === "playing" || game.status === "waiting")) ||
+        (match && match.status !== "over" && match.status !== "cancelled");
+      if (busy) {
         this.send("life_game", { to: fromId, gameId: p.gameId, action: "decline", game: p.game });
         return;
       }
@@ -725,13 +745,18 @@ export class LifeClient {
         this.send("life_game", { to: fromId, gameId: p.gameId, action: "decline", game: p.game });
         return;
       }
-      store.patch({ invite: { id: p.gameId, kind: p.game, fromId, fromName: name, at: Date.now() } });
+      const seed = Number.isInteger(p.seed) ? p.seed : undefined;
+      store.patch({ invite: { id: p.gameId, kind: p.game, seed, fromId, fromName: name, at: Date.now() } });
       playSound("button-click");
       vibrate([20, 30, 20]);
       return;
     }
     if (p.action === "quit" && store.invite?.id === p.gameId) {
       store.patch({ invite: null });
+      return;
+    }
+    if (isSportKind(p.game)) {
+      this.receiveSport(fromId, p);
       return;
     }
     if (!game || game.id !== p.gameId || game.opponent.kind !== "classmate" || game.opponent.id !== fromId) return;
@@ -755,10 +780,142 @@ export class LifeClient {
     if (store.invite && (now - store.invite.at > INVITE_TIMEOUT_MS || !this.classmates.has(store.invite.fromId))) {
       store.patch({ invite: null });
     }
+    const match = store.match;
+    if (match?.opponent.kind === "classmate" && match.status !== "over" && match.status !== "cancelled" && !this.classmates.has(match.opponent.id)) {
+      this.setMatch({ ...match, status: "cancelled", note: `${match.opponent.name} left school.` });
+    }
     const game = store.game;
     if (!game || game.opponent.kind !== "classmate" || (game.status !== "playing" && game.status !== "waiting")) return;
     if (!this.classmates.has(game.opponent.id)) {
       this.setGame({ ...game, status: "cancelled", note: `${game.opponent.name} left school.` });
+    }
+  }
+
+  /** The activity other students see while I'm in a game or match (for my badge). */
+  private playingActivity(): string | null {
+    const { game, match } = useLifeStore.getState();
+    if (game?.status === "playing") return "board_games";
+    if (match && (match.status === "ready" || match.status === "playing" || match.status === "finished")) return sports[match.kind].activity;
+    return null;
+  }
+
+  // -------------------------------------------------------------------------
+  // Sports
+  // -------------------------------------------------------------------------
+
+  /** Starts a match against the computer. */
+  playSportComputer(kind: SportKind): void {
+    const store = useLifeStore.getState();
+    const tired = sportBlocker(this.sim);
+    if (tired) {
+      store.toast(tired, "bad");
+      return;
+    }
+    const seed = Math.floor(Math.random() * 2 ** 31);
+    this.setMatch({
+      id: generateId(),
+      kind,
+      seed,
+      opponent: { kind: "computer" },
+      status: "ready",
+      theirScore: computerScore(kind, seededRandom(seed ^ 0xc0ffee)),
+    });
+  }
+
+  /** Invites a classmate to the same challenge (same seed). */
+  inviteToSport(kind: SportKind, classmateId: string): void {
+    const mate = this.classmates.get(classmateId);
+    const store = useLifeStore.getState();
+    if (!mate) {
+      store.toast("They're not at school right now.", "bad");
+      return;
+    }
+    const tired = sportBlocker(this.sim);
+    if (tired) {
+      store.toast(tired, "bad");
+      return;
+    }
+    const id = generateId();
+    const seed = Math.floor(Math.random() * 2 ** 31);
+    this.setMatch({ id, kind, seed, opponent: { kind: "classmate", id: mate.id, name: mate.name }, status: "waiting" });
+    this.send("life_game", { to: mate.id, gameId: id, action: "invite", game: kind, seed });
+    setTimeout(() => {
+      const match = useLifeStore.getState().match;
+      if (match?.id === id && match.status === "waiting") {
+        this.send("life_game", { to: mate.id, gameId: id, action: "quit", game: kind });
+        this.setMatch({ ...match, status: "cancelled", note: `${mate.name} didn't answer.` });
+      }
+    }, INVITE_TIMEOUT_MS);
+  }
+
+  /** The mini-game is starting. */
+  startSport(): void {
+    const match = useLifeStore.getState().match;
+    if (match?.status === "ready") this.setMatch({ ...match, status: "playing" });
+  }
+
+  /** My turn is over: record my score and compare once both are in. */
+  submitSportScore(score: number): void {
+    const match = useLifeStore.getState().match;
+    if (!match || match.status !== "playing" || !Number.isFinite(score)) return;
+    const mine = Math.max(0, Math.round(score));
+    if (match.opponent.kind === "classmate") {
+      this.send("life_game", { to: match.opponent.id, gameId: match.id, action: "score", game: match.kind, score: mine });
+    }
+    const next: SportMatch = { ...match, myScore: mine, status: "finished" };
+    if (next.theirScore !== undefined) this.concludeSport(next);
+    else this.setMatch(next);
+  }
+
+  leaveSport(): void {
+    const match = useLifeStore.getState().match;
+    if (!match) return;
+    if (match.opponent.kind === "classmate" && match.status !== "over" && match.status !== "cancelled") {
+      this.send("life_game", { to: match.opponent.id, gameId: match.id, action: "quit", game: match.kind });
+    }
+    this.setMatch(null);
+  }
+
+  private setMatch(match: SportMatch | null): void {
+    useLifeStore.getState().patch({ match });
+    this.sendPresence(true);
+  }
+
+  private concludeSport(match: SportMatch): void {
+    const result = compareScores(match.kind, match.myScore!, match.theirScore!);
+    this.setMatch({ ...match, status: "over", result });
+    const vsClassmate = match.opponent.kind === "classmate";
+    const reward = finishSport(this.sim, match.kind, vsClassmate, result);
+    this.handleEvents(reward.events);
+    playSound(result === "win" ? "winner" : "powerup");
+    vibrate(result === "win" ? [30, 40, 30] : 20);
+    useLifeStore
+      .getState()
+      .toast(
+        `${result === "win" ? "🏆 You won!" : result === "draw" ? "🤝 A draw!" : `${sports[match.kind].emoji} Good effort!`} ${reward.summary}`,
+        result === "lose" ? "info" : "good",
+      );
+    if (match.opponent.kind === "classmate" && this.session.studentId < match.opponent.id) {
+      void this.addFriendship(match.opponent.id, SOCIAL_RULES.playTogether.friendship);
+    }
+    void this.save(true);
+  }
+
+  private receiveSport(fromId: string, p: GamePayload): void {
+    const match = useLifeStore.getState().match;
+    if (!match || match.id !== p.gameId || match.opponent.kind !== "classmate" || match.opponent.id !== fromId) return;
+    const name = match.opponent.name;
+    if (p.action === "accept" && match.status === "waiting") {
+      this.setMatch({ ...match, status: "ready" });
+      useLifeStore.getState().toast(`${sports[match.kind].emoji} ${name} is in! Press Start when you're ready.`, "good");
+    } else if (p.action === "decline" && match.status === "waiting") {
+      this.setMatch({ ...match, status: "cancelled", note: `${name} can't play right now.` });
+    } else if (p.action === "quit" && match.status !== "over") {
+      this.setMatch({ ...match, status: "cancelled", note: `${name} left the match.` });
+    } else if (p.action === "score" && Number.isFinite(p.score) && match.theirScore === undefined) {
+      const next: SportMatch = { ...match, theirScore: Math.max(0, Math.round(p.score!)) };
+      if (next.status === "finished") this.concludeSport(next);
+      else this.setMatch(next);
     }
   }
 
@@ -915,8 +1072,7 @@ export class LifeClient {
 
   private sendPresence(force: boolean): void {
     const sim = this.sim;
-    const playing = useLifeStore.getState().game?.status === "playing";
-    const key = `${Math.round(sim.x)},${Math.round(sim.y)},${sim.facing},${sim.activity?.key ?? ""},${playing}`;
+    const key = `${Math.round(sim.x)},${Math.round(sim.y)},${sim.facing},${sim.activity?.key ?? this.playingActivity() ?? ""}`;
     const now = Date.now();
     const changed = key !== this.lastPresenceKey;
     if (!force && now - this.lastPresence < (changed ? PRESENCE_MOVING_MS : PRESENCE_IDLE_MS)) return;
@@ -928,7 +1084,7 @@ export class LifeClient {
       x: Math.round(sim.x),
       y: Math.round(sim.y),
       facing: sim.facing,
-      activity: sim.activity?.key ?? (useLifeStore.getState().game?.status === "playing" ? "board_games" : null),
+      activity: sim.activity?.key ?? this.playingActivity(),
       mood: mood(sim.profile.day.needs),
     });
   }
@@ -965,7 +1121,9 @@ export class LifeClient {
       return;
     }
     if (m.type === "life_game") {
-      if (m.payload.to === this.session.studentId && isGameKind(m.payload.game)) this.receiveGame(m.playerId, m.payload);
+      const kind = m.payload.game;
+      if (m.payload.to !== this.session.studentId) return;
+      if (isGameKind(kind) || isSportKind(kind)) this.receiveGame(m.playerId, m.payload);
       return;
     }
     if (m.type === "life_chat") {

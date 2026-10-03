@@ -1,4 +1,5 @@
 import type { PeriodKind } from "./clock";
+import type { SportKind } from "./sports";
 import type { CounterKey, NeedKey } from "./types";
 
 export type ActivityEffects = Partial<Record<NeedKey, number>> & { grades?: number; xp?: number };
@@ -28,8 +29,10 @@ export type ActivityDef = {
   closedMessage?: string;
   counter?: CounterKey;
   job?: JobDef;
-  /** Opens a screen (games table, shop, bank) instead of running a timed activity. */
-  opens?: "games" | "shop" | "bank";
+  /** Opens a screen (games table, sports, shop, bank) instead of running a timed activity. */
+  opens?: "games" | "sports" | "shop" | "bank";
+  /** For `opens: "sports"`: which sport is played here. */
+  sport?: SportKind;
 };
 
 export const activities: Record<string, ActivityDef> = {
@@ -118,13 +121,15 @@ export const activities: Record<string, ActivityDef> = {
     label: "Play football",
     emoji: "⚽",
     verb: "playing football",
-    durationSec: 15,
+    durationSec: 0,
     cost: 0,
-    effects: { fun: 20, energy: -12, social: 4, xp: 6 },
+    effects: {},
     periods: ["break", "after"],
-    closedMessage: "Football is for break time and after school.",
-    counter: "football",
+    closedMessage: "Sports are for break time and after school.",
+    opens: "sports",
+    sport: "football",
   },
+
   rest: {
     key: "rest",
     label: "Rest",
@@ -201,6 +206,45 @@ export const activities: Record<string, ActivityDef> = {
     // More classmates at school means more customers.
     job: { basePay: 200, perClassmate: 100, maxExtra: 500, where: "Main Corridor, east end" },
   },
+  run_race: {
+    key: "run_race",
+    label: "Run a race",
+    emoji: "🏃",
+    verb: "racing",
+    durationSec: 0,
+    cost: 0,
+    effects: {},
+    periods: ["break", "after"],
+    closedMessage: "Sports are for break time and after school.",
+    opens: "sports",
+    sport: "race",
+  },
+  play_tabletennis: {
+    key: "play_tabletennis",
+    label: "Play table tennis",
+    emoji: "🏓",
+    verb: "playing table tennis",
+    durationSec: 0,
+    cost: 0,
+    effects: {},
+    periods: ["break", "after"],
+    closedMessage: "Sports are for break time and after school.",
+    opens: "sports",
+    sport: "tabletennis",
+  },
+  play_tenten: {
+    key: "play_tenten",
+    label: "Play ten-ten",
+    emoji: "👣",
+    verb: "playing ten-ten",
+    durationSec: 0,
+    cost: 0,
+    effects: {},
+    periods: ["assembly", "break", "after"],
+    closedMessage: "Ten-ten is for before assembly, break time and after school.",
+    opens: "sports",
+    sport: "tenten",
+  },
   // The rest of the school.
   water_crops: {
     key: "water_crops",
@@ -242,12 +286,15 @@ export const activities: Record<string, ActivityDef> = {
     label: "Play basketball",
     emoji: "🏀",
     verb: "playing basketball",
-    durationSec: 12,
+    durationSec: 0,
     cost: 0,
-    effects: { fun: 18, energy: -12, social: 4, xp: 5 },
+    effects: {},
     periods: ["break", "after"],
-    closedMessage: "Basketball is for break time and after school.",
+    closedMessage: "Sports are for break time and after school.",
+    opens: "sports",
+    sport: "basketball",
   },
+
   do_experiment: {
     key: "do_experiment",
     label: "Do an experiment",

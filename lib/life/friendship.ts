@@ -27,7 +27,8 @@ export const SOCIAL_RULES = {
   hi: { friendship: 2, social: 5 },
   help: { friendship: 3, xp: 8, theirGrades: 5, cooldownMs: 60_000 },
   share: { friendship: 3, cost: 200, theirHunger: 12 },
-  footballTogether: { friendship: 2, social: 4, range: 160 },
+  /** Finishing a table game or sports match together (recorded once, by one of the pair). */
+  playTogether: { friendship: 2 },
   /** How close two students must be to interact. */
   talkRange: 90,
 } as const;

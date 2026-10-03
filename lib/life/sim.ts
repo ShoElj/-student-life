@@ -9,6 +9,7 @@ import { getActivity, type ActivityDef } from "./activities";
 import { getSchoolTime, type Period } from "./clock";
 import { SOCIAL_RULES } from "./friendship";
 import { getGoal, pickGoals } from "./goals";
+import { SPORT_MIN_ENERGY, sports, type SportKind } from "./sports";
 import { LIFE_SPAWN, lifeGeometry, lifeSpots, type Spot } from "./map";
 import {
   earn,
@@ -53,7 +54,6 @@ export type LifeEvent =
   | { kind: "activity_cancelled"; key: string; reason: string }
   | { kind: "goal_done"; goalId: string; text: string; reward: number }
   | { kind: "need_low"; need: NeedKey }
-  | { kind: "played_with"; classmateIds: string[] }
   | { kind: "report_card"; report: ReportCard }
   | { kind: "money_in"; label: string; amount: number }
   | { kind: "new_day"; dayIndex: number };
@@ -87,6 +87,7 @@ function emptyCounters(): Counters {
     shifts: 0,
     saved: 0,
     games: 0,
+    sports: 0,
   };
 }
 
@@ -406,16 +407,6 @@ export function stepLife(
         sim.activity = null;
         const summary = applyActivity(sim, def, classmates.length, now);
         events.push({ kind: "activity_done", key: def.key, summary });
-        if (def.key === "play_football") {
-          const mates = classmates.filter(
-            (c) => c.activity === "play_football" && Math.hypot(c.x - sim.x, c.y - sim.y) <= SOCIAL_RULES.footballTogether.range,
-          );
-          if (mates.length > 0) {
-            day.needs.social = clamp(day.needs.social + Math.min(3, mates.length) * SOCIAL_RULES.footballTogether.social);
-            bump(sim, "friendActs");
-            events.push({ kind: "played_with", classmateIds: mates.map((m) => m.id) });
-          }
-        }
       }
     }
   }
@@ -524,4 +515,29 @@ export function finishGame(sim: LifeSim, vsClassmate: boolean, result: GameResul
   bump(sim, "games");
   if (vsClassmate) bump(sim, "friendActs");
   return { summary: `+15 fun${vsClassmate ? " · +8 friends" : ""} · +${xp} XP`, events: checkGoals(sim) };
+}
+
+// ---------------------------------------------------------------------------
+// Sports
+// ---------------------------------------------------------------------------
+
+/** Why a sports match can't start right now, or null. */
+export function sportBlocker(sim: LifeSim): string | null {
+  if (sim.profile.day.needs.energy < SPORT_MIN_ENERGY) return "You're too tired for sport. Rest on the sofa or in the sick bay first.";
+  return null;
+}
+
+/** Rewards for finishing a sports match. */
+export function finishSport(sim: LifeSim, kind: SportKind, vsClassmate: boolean, result: GameResult): { summary: string; events: LifeEvent[] } {
+  const day = sim.profile.day;
+  const { fun, energy, social } = sports[kind].effects;
+  day.needs.fun = clamp(day.needs.fun + fun);
+  day.needs.energy = clamp(day.needs.energy + energy);
+  day.needs.social = clamp(day.needs.social + social + (vsClassmate ? 6 : 0));
+  const xp = result === "win" ? (vsClassmate ? 12 : 8) : 3;
+  sim.profile.xp += xp;
+  bump(sim, "sports");
+  if (kind === "football") bump(sim, "football");
+  if (vsClassmate) bump(sim, "friendActs");
+  return { summary: `+${fun} fun · +${xp} XP`, events: checkGoals(sim) };
 }

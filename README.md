@@ -17,12 +17,12 @@ Everyone in the school lives in the same world at the same time and can see each
 
 | Area | Places and what to do there |
 | --- | --- |
-| Outside, north | **School Farm** (water crops — job, pick oranges) · **Assembly Ground** (morning assembly) · **Sports Field** (football, cheer from the stands) · **Basketball Court** |
+| Outside, north | **School Farm** (water crops — job, pick oranges) · **Assembly Ground** (morning assembly) · **Sports Field** (penalty shootout, cheer from the stands) · **Basketball Court** (free throws) |
 | Main Corridor | Lockers, notice board, water tap, chin-chin stall (job) |
 | Middle row | **Classrooms A & B** (lessons, sweeping job) · **Science Lab** (experiments) · **Computer Lab** (coding, fix-the-computers job) · **Library** (study, comics, shelving job) · **Music & Art** (drums, painting) |
 | South Corridor | Joins the south rooms |
-| South row | **Canteen** (jollof, puff-puff, kitchen job) · **Common Room** (two games tables, TV corner, music corner, sofa) · **Sick Bay** (big energy rest) · **School Shop** (buy clothes) · **School Bank** (savings) |
-| Front Yard | **School Gate** (where you arrive, with the school's name on the sign) · **Tuck Shop** (Gala & Fanta) · **Bus Stop** (catch the bus at Home Time) |
+| South row | **Canteen** (jollof, puff-puff, kitchen job) · **Common Room** (two games tables, table tennis, TV corner, music corner, sofa) · **Sick Bay** (big energy rest) · **School Shop** (buy clothes) · **School Bank** (savings) |
+| Front Yard | **School Gate** (where you arrive, with the school's name on the sign) · **Tuck Shop** (Gala & Fanta) · **Running track** (100 m sprint) · **Ten-ten circle** · **Bus Stop** (catch the bus at Home Time) |
 
 New clothes are bought at the School Shop (clothes you own can be changed anywhere), and money
 goes in or out of savings at the School Bank.
@@ -51,6 +51,11 @@ goes in or out of savings at the School Bank.
 - **Table games:** at the games table in the Common Room, play **Tic-tac-toe** or **Ayọ** (the
   Yoruba seed-sowing game) against the computer, or invite a classmate at school to play live.
   Games raise Fun (and Friends when played together) and count towards a daily goal.
+- **Sports:** five playable mini-games, against the computer or a classmate (both get the same
+  challenge and compare scores): ⚽ **penalty shootout** on the Sports Field, 🏀 **free throws** on
+  the Basketball Court, 🏃 **100 m sprint** on the Front Yard track, 🏓 **table tennis** in the
+  Common Room and 👣 **ten-ten** in the Front Yard. Matches cost energy, give fun and XP, count
+  towards daily goals and build friendships.
 - **Names:** any name up to 20 characters — accents, emoji and other scripts are all fine.
 - **Friendships:** greetings, helping with homework in the library, sharing snacks, playing
   football and table games together build friendship levels.
