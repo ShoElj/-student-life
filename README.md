@@ -76,9 +76,8 @@ eye on Realtime quotas or lower the rates in `lib/realtime/sync.ts`.
 
 ## Deploying to Vercel
 
-This app lives in the `school-breaktime-battle/` folder of the repository. When importing the
-repo in Vercel, set **Root Directory** to `school-breaktime-battle`, and add the two
-environment variables above.
+Import this repository in Vercel (the app is at the repository root, so leave **Root
+Directory** empty), and add the two environment variables above.
 
 ## How it works
 
