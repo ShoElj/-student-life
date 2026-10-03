@@ -40,6 +40,10 @@ goes in or out of savings at the School Bank.
   goals and a reward from home for an A/B/C report card. Up to 4 shifts a day; job pay rises
   with your level. Keep money in **savings** to earn 5% interest each night (up to ₦500). The
   wallet shows today's earnings and spending and a history of every transaction.
+- **Sending money:** in the wallet's 💸 Send tab (or from Talk), send a classmate ₦50–₦5,000 with
+  an optional note, up to ₦10,000 a day. It arrives instantly if they are at school, otherwise
+  the next time they come in. Transfers are recorded in the database and each one is collected
+  exactly once (`supabase/migrations/005_money_transfers.sql`).
 - **Spending:** jollof rice ₦500, puff-puff ₦200, sharing a snack with a friend ₦200, clothes
   ₦500–₦2,500.
 - **Wardrobe:** spend money on tops, colours, hairstyles and extras; classmates see your outfit.
@@ -60,7 +64,7 @@ goes in or out of savings at the School Bank.
 - **Friendships:** greetings, helping with homework in the library, sharing snacks, playing
   football and table games together build friendship levels.
 
-Online, accounts, saves and messages live in Supabase (`supabase/migrations/002`–`004`): PINs
+Online, accounts, saves, messages and money transfers live in Supabase (`supabase/migrations/002`–`005`): PINs
 are bcrypt-hashed in the database, 5 wrong PINs lock the name for 5 minutes, and the tables are
 only reachable through functions that check a per-student session token. Positions and social
 actions use Realtime broadcast on `life:{classCode}`. In demo mode the same rules run on
@@ -91,7 +95,7 @@ npm run test       # Vitest: rules, scoring, collision, bots
 ## Online multiplayer (Supabase)
 
 1. Create a Supabase project.
-2. Run the files in `supabase/migrations/` (001–004) in order in the SQL editor.
+2. Run the files in `supabase/migrations/` (001–005) in order in the SQL editor.
 3. Copy `.env.example` to `.env.local` and fill in:
 
    ```

@@ -53,6 +53,14 @@ export function spend(profile: LifeProfile, amount: number, label: string, now =
   return true;
 }
 
+/** Money a classmate sent me: goes into the wallet, but isn't "earned". */
+export function receive(profile: LifeProfile, amount: number, label: string, now = Date.now()): void {
+  const value = Math.max(0, Math.round(amount));
+  if (value === 0) return;
+  profile.coins += value;
+  record(profile, label, value, now);
+}
+
 /** Gives back money for something that didn't happen (e.g. walking away from the counter). */
 export function refund(profile: LifeProfile, amount: number, label: string, now = Date.now()): void {
   const value = Math.max(0, Math.round(amount));

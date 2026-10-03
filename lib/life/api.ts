@@ -31,6 +31,12 @@ export type ChatMessage = { id: number; from: string; fromName: string; to: stri
 
 export const MAX_MESSAGE_LENGTH = 300;
 
+/** Money sent to me by a classmate, collected once. */
+export type IncomingTransfer = { id: number; from: string; fromName: string; amount: number; note: string; at: number };
+
+/** Transfer limits (also enforced by the database). */
+export const TRANSFER_LIMITS = { min: 50, max: 5000, perDay: 10_000, perMinute: 5, noteLength: 60 } as const;
+
 export class LifeApiError extends Error {}
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -44,6 +50,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   too_fast: "Slow down a little — wait a few seconds before sending more messages.",
   not_found: "That classmate isn't in your school.",
   empty: "Type a message first.",
+  invalid_amount: "You can send between ₦50 and ₦5,000 at a time.",
+  daily_limit: "You can send up to ₦10,000 a day. Try again tomorrow.",
 };
 
 function fail(code: string): never {
@@ -63,6 +71,9 @@ export interface LifeApi {
   sendMessage(token: string, to: string | null, body: string): Promise<{ id: number; at: number }>;
   /** Latest school messages and my private conversations, oldest first. */
   messages(token: string): Promise<ChatMessage[]>;
+  sendMoney(token: string, to: string, amount: number, note: string): Promise<{ id: number; at: number }>;
+  /** Collects money classmates have sent me. Each transfer is returned only once. */
+  claimMoney(token: string): Promise<IncomingTransfer[]>;
 }
 
 // ---------------------------------------------------------------------------
@@ -122,6 +133,23 @@ class SupabaseLifeApi implements LifeApi {
     if (result?.error) fail(result.error);
     return result.messages;
   }
+
+  async sendMoney(token: string, to: string, amount: number, note: string): Promise<{ id: number; at: number }> {
+    const result = await this.rpc<{ id: number; at: number; error?: string }>("life_send_money", {
+      p_token: token,
+      p_to: to,
+      p_amount: amount,
+      p_note: note,
+    });
+    if (result?.error) fail(result.error);
+    return result;
+  }
+
+  async claimMoney(token: string): Promise<IncomingTransfer[]> {
+    const result = await this.rpc<{ transfers: IncomingTransfer[]; error?: string }>("life_claim_money", { p_token: token });
+    if (result?.error) fail(result.error);
+    return result.transfers;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -142,6 +170,7 @@ type LocalClass = {
   students: Record<string, LocalStudent>;
   friendships: Record<string, number>;
   messages?: ChatMessage[];
+  transfers?: (IncomingTransfer & { to: string; claimed: boolean })[];
 };
 
 const LOCAL_KEY = "sbb-life-classes";
@@ -297,6 +326,37 @@ class LocalLifeApi implements LifeApi {
     if (!found) fail("signed_out");
     const { cls, me } = found;
     return (cls.messages ?? []).filter((m) => m.to === null || m.to === me.id || m.from === me.id).slice(-150);
+  }
+
+  async sendMoney(token: string, to: string, amount: number, rawNote: string): Promise<{ id: number; at: number }> {
+    const data = readAll();
+    const found = findByToken(data, token);
+    if (!found) fail("signed_out");
+    const { cls, me } = found;
+    if (!Number.isInteger(amount) || amount < TRANSFER_LIMITS.min || amount > TRANSFER_LIMITS.max) fail("invalid_amount");
+    if (to === me.id || !Object.values(cls.students).some((s) => s.id === to)) fail("not_found");
+    const transfers = cls.transfers ?? [];
+    const now = Date.now();
+    const mine = transfers.filter((t) => t.from === me.id);
+    if (mine.filter((t) => now - t.at < 60_000).length >= TRANSFER_LIMITS.perMinute) fail("too_fast");
+    if (mine.filter((t) => now - t.at < 86_400_000).reduce((sum, t) => sum + t.amount, 0) + amount > TRANSFER_LIMITS.perDay) fail("daily_limit");
+    const id = (transfers[transfers.length - 1]?.id ?? 0) + 1;
+    transfers.push({ id, from: me.id, fromName: me.name, to, amount, note: rawNote.trim().slice(0, TRANSFER_LIMITS.noteLength), at: now, claimed: false });
+    cls.transfers = transfers.slice(-300);
+    writeAll(data);
+    return { id, at: now };
+  }
+
+  async claimMoney(token: string): Promise<IncomingTransfer[]> {
+    const data = readAll();
+    const found = findByToken(data, token);
+    if (!found) fail("signed_out");
+    const { cls, me } = found;
+    const waiting = (cls.transfers ?? []).filter((t) => t.to === me.id && !t.claimed);
+    if (waiting.length === 0) return [];
+    for (const t of waiting) t.claimed = true;
+    writeAll(data);
+    return waiting.map(({ id, from, fromName, amount, note, at }) => ({ id, from, fromName, amount, note, at }));
   }
 }
 

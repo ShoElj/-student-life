@@ -11,13 +11,13 @@ import { playSound, vibrate } from "@/lib/sound";
 import { useLifeStore, type GameSession, type SportMatch } from "@/store/lifeStore";
 import { generateId } from "@/lib/utils";
 import { activities, getActivity, jobKeys } from "./activities";
-import { getLifeApi, LifeApiError, MAX_MESSAGE_LENGTH, type ChatMessage, type LifeApi } from "./api";
+import { getLifeApi, LifeApiError, MAX_MESSAGE_LENGTH, TRANSFER_LIMITS, type ChatMessage, type LifeApi } from "./api";
 import { getSchoolTime } from "./clock";
 import { GREETINGS, SOCIAL_RULES } from "./friendship";
 import { games, isGameKind, replay, type GameKind } from "./games";
 import { getGoal } from "./goals";
 import { compareScores, computerScore, isSportKind, seededRandom, sports, type SportKind } from "./sports";
-import { formatMoney, LEGACY_COIN_VALUE, PROFILE_VERSION } from "./money";
+import { formatMoney, LEGACY_COIN_VALUE, PROFILE_VERSION, receive, spend } from "./money";
 import {
   activityBlocker,
   buyOrWear,
@@ -101,6 +101,7 @@ type LifeMessage =
   | { type: "life_state"; roomCode: string; playerId: string; payload: StatePayload; timestamp: number }
   | { type: "life_social"; roomCode: string; playerId: string; payload: SocialPayload; timestamp: number }
   | { type: "life_chat"; roomCode: string; playerId: string; payload: ChatPayload; timestamp: number }
+  | { type: "life_money"; roomCode: string; playerId: string; payload: { to: string }; timestamp: number }
   | { type: "life_game"; roomCode: string; playerId: string; payload: GamePayload; timestamp: number }
   | { type: "life_leave"; roomCode: string; playerId: string; payload: Record<string, never>; timestamp: number };
 
@@ -260,13 +261,17 @@ export class LifeClient {
     });
     void this.refreshRoster();
     void this.refreshMessages();
+    void this.claimMoney();
     const loop = setInterval(() => {
       // Keep the school running even when the tab is not drawing frames.
       const now = performance.now();
       if (this.lastFrame === null || now - this.lastFrame > 120) this.frame(now);
     }, 120);
     const roster = setInterval(() => void this.refreshRoster(), ROSTER_REFRESH_MS);
-    const chat = setInterval(() => void this.refreshMessages(), CHAT_REFRESH_MS);
+    const chat = setInterval(() => {
+      void this.refreshMessages();
+      void this.claimMoney();
+    }, CHAT_REFRESH_MS);
     const onHide = () => {
       if (document.visibilityState === "hidden") void this.save(true);
     };
@@ -920,6 +925,65 @@ export class LifeClient {
   }
 
   // -------------------------------------------------------------------------
+  // Sending money
+  // -------------------------------------------------------------------------
+
+  private claiming = false;
+
+  /** Sends money from my wallet to a classmate. */
+  async sendMoney(to: string, amount: number, note: string): Promise<boolean> {
+    const store = useLifeStore.getState();
+    const value = Math.floor(amount);
+    const name = this.nameOf(to);
+    if (!Number.isFinite(value) || value < TRANSFER_LIMITS.min || value > TRANSFER_LIMITS.max) {
+      store.toast(`You can send between ${formatMoney(TRANSFER_LIMITS.min)} and ${formatMoney(TRANSFER_LIMITS.max)} at a time.`, "bad");
+      return false;
+    }
+    if (value > this.sim.profile.coins) {
+      store.toast(`You only have ${formatMoney(this.sim.profile.coins)} in your wallet.`, "bad");
+      return false;
+    }
+    try {
+      await this.api.sendMoney(this.session.token, to, value, note.trim());
+    } catch (e) {
+      store.toast(e instanceof Error ? e.message : "Money not sent.", "bad");
+      return false;
+    }
+    spend(this.sim.profile, value, `Sent to ${name}`);
+    this.send("life_money", { to });
+    playSound("powerup");
+    vibrate(20);
+    store.toast(`💸 Sent ${formatMoney(value)} to ${name}`, "good");
+    void this.save(true);
+    this.publishHud(Date.now());
+    return true;
+  }
+
+  /** Collects money classmates have sent me (each transfer once) and saves straight away. */
+  private async claimMoney(): Promise<void> {
+    if (this.claiming || this.disposed) return;
+    this.claiming = true;
+    try {
+      const transfers = await this.api.claimMoney(this.session.token);
+      if (transfers.length === 0) return;
+      const store = useLifeStore.getState();
+      for (const t of transfers) {
+        const note = maskRudeWords(t.note ?? "");
+        receive(this.sim.profile, t.amount, `From ${t.fromName}${note ? `: “${note}”` : ""}`.slice(0, 60), t.at);
+        store.toast(`💸 ${t.fromName} sent you ${formatMoney(t.amount)}${note ? ` — “${note}”` : ""}`, "good");
+      }
+      playSound("winner");
+      vibrate([30, 40, 30]);
+      await this.save(true);
+      this.publishHud(Date.now());
+    } catch (e) {
+      if (e instanceof LifeApiError && e.message.includes("signed in somewhere else")) this.signedOutElsewhere();
+    } finally {
+      this.claiming = false;
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // Chat
   // -------------------------------------------------------------------------
 
@@ -1124,6 +1188,11 @@ export class LifeClient {
       const kind = m.payload.game;
       if (m.payload.to !== this.session.studentId) return;
       if (isGameKind(kind) || isSportKind(kind)) this.receiveGame(m.playerId, m.payload);
+      return;
+    }
+    if (m.type === "life_money") {
+      // A classmate just sent me money: collect it now rather than at the next check.
+      if (m.payload.to === this.session.studentId) void this.claimMoney();
       return;
     }
     if (m.type === "life_chat") {

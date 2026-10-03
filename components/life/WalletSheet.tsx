@@ -5,6 +5,7 @@ import { getLifeClient } from "@/lib/life/client";
 import { formatMoney, interestFor, MAX_SHIFTS_PER_DAY, POCKET_MONEY, SAVINGS_INTEREST_RATE } from "@/lib/life/money";
 import { cn } from "@/lib/utils";
 import type { LifeHud } from "@/store/lifeStore";
+import { SendMoney } from "./SendMoney";
 
 const AMOUNTS = [200, 500, 1000];
 
@@ -17,8 +18,10 @@ function timeAgo(at: number, now: number): string {
 }
 
 /** Wallet, savings, ways to earn and where the money went. */
-export function WalletSheet({ hud }: { hud: LifeHud }) {
-  const [tab, setTab] = useState<"wallet" | "earn" | "history">("wallet");
+export type WalletTab = "wallet" | "send" | "earn" | "history";
+
+export function WalletSheet({ hud, initialTab = "wallet", sendTo }: { hud: LifeHud; initialTab?: WalletTab; sendTo?: string }) {
+  const [tab, setTab] = useState<WalletTab>(initialTab);
   const [now] = useState(() => Date.now());
   const client = getLifeClient();
   const atBank = hud.nearSpot?.opens === "bank";
@@ -55,10 +58,11 @@ export function WalletSheet({ hud }: { hud: LifeHud }) {
         <span className="text-danger">{formatMoney(hud.moneySpent)} spent</span>
       </p>
 
-      <div className="grid grid-cols-3 gap-1 rounded-2xl bg-ink/5 p-1" role="tablist" aria-label="Wallet sections">
+      <div className="grid grid-cols-4 gap-1 rounded-2xl bg-ink/5 p-1" role="tablist" aria-label="Wallet sections">
         {(
           [
             ["wallet", "🏦 Save"],
+            ["send", "💸 Send"],
             ["earn", "💼 Earn"],
             ["history", "🧾 History"],
           ] as const
@@ -103,6 +107,8 @@ export function WalletSheet({ hud }: { hud: LifeHud }) {
           </div>
         </div>
       )}
+
+      {tab === "send" && <SendMoney initialTo={sendTo} />}
 
       {tab === "earn" && (
         <div className="flex flex-col gap-2">

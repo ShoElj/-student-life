@@ -17,12 +17,12 @@ import { useLifeStore, type LifeHud } from "@/store/lifeStore";
 import { ChatSheet, useUnread } from "./ChatSheet";
 import { GameInviteCard, GamesSheet } from "./GamesSheet";
 import { LookAvatar } from "./LookPreview";
-import { WalletSheet } from "./WalletSheet";
+import { WalletSheet, type WalletTab } from "./WalletSheet";
 import { MapSheet } from "./MapSheet";
 import { SportsSheet } from "./SportsSheet";
 import { WardrobeSheet } from "./WardrobeSheet";
 
-type Sheet = { kind: "goals" } | { kind: "wallet" } | { kind: "chat"; thread?: string } | { kind: "games" } | { kind: "sports" } | { kind: "map" } | { kind: "wardrobe" } | { kind: "people" } | { kind: "menu" } | { kind: "talk"; id: string } | null;
+type Sheet = { kind: "goals" } | { kind: "wallet"; tab?: WalletTab; to?: string } | { kind: "chat"; thread?: string } | { kind: "games" } | { kind: "sports" } | { kind: "map" } | { kind: "wardrobe" } | { kind: "people" } | { kind: "menu" } | { kind: "talk"; id: string } | null;
 
 const NEEDS: { key: NeedKey; emoji: string; label: string }[] = [
   { key: "energy", emoji: "⚡", label: "Energy" },
@@ -280,7 +280,7 @@ function PeopleSheet({ onTalk }: { onTalk: (id: string) => void }) {
   );
 }
 
-function TalkSheet({ targetId, onDone, onMessage }: { targetId: string; onDone: () => void; onMessage: () => void }) {
+function TalkSheet({ targetId, onDone, onMessage, onSendMoney }: { targetId: string; onDone: () => void; onMessage: () => void; onSendMoney: () => void }) {
   const entry = useLifeStore((s) => s.roster.find((r) => r.id === targetId));
   const coins = useLifeStore((s) => s.hud?.coins ?? 0);
   const [busy, setBusy] = useState(false);
@@ -313,6 +313,9 @@ function TalkSheet({ targetId, onDone, onMessage }: { targetId: string; onDone: 
         className="min-h-12 rounded-2xl bg-brand px-3 text-base font-bold text-white active:scale-95"
       >
         💬 Write a message to {entry.name}
+      </button>
+      <button type="button" onClick={onSendMoney} className="min-h-12 rounded-2xl bg-leaf/15 px-3 text-base font-bold text-leaf-dark active:scale-95">
+        💸 Send money to {entry.name}
       </button>
       <p className="text-sm font-bold text-ink/60">Say something</p>
       <div className="grid grid-cols-2 gap-2">
@@ -552,7 +555,7 @@ export function LifeGame() {
       )}
       {sheet?.kind === "wallet" && hud && (
         <BottomSheet title="My money" onClose={close}>
-          <WalletSheet hud={hud} />
+          <WalletSheet hud={hud} initialTab={sheet.tab} sendTo={sheet.to} />
         </BottomSheet>
       )}
       {sheet?.kind === "wardrobe" && (
@@ -567,7 +570,9 @@ export function LifeGame() {
       )}
       {sheet?.kind === "talk" && (
         <BottomSheet title="Talk" onClose={close}>
-          <TalkSheet targetId={sheet.id} onDone={close} onMessage={() => setSheet({ kind: "chat", thread: sheet.id })} />
+          <TalkSheet targetId={sheet.id} onDone={close} onMessage={() => setSheet({ kind: "chat", thread: sheet.id })}
+            onSendMoney={() => setSheet({ kind: "wallet", tab: "send", to: sheet.id })}
+          />
         </BottomSheet>
       )}
       {sheet?.kind === "menu" && (
