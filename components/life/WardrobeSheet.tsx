@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { getLifeClient } from "@/lib/life/client";
+import { formatMoney } from "@/lib/life/money";
 import { CATEGORY_LABELS, isOwned, isWorn, wardrobe, type WardrobeCategory } from "@/lib/life/wardrobe";
 import { cn } from "@/lib/utils";
 import { useLifeStore } from "@/store/lifeStore";
@@ -9,7 +10,7 @@ import { LookPreview } from "./LookPreview";
 
 const CATEGORIES = Object.keys(CATEGORY_LABELS) as WardrobeCategory[];
 
-/** Change outfit. Free items can be worn straight away; others are bought once with coins. */
+/** Change outfit. Free items can be worn straight away; others are bought once. */
 export function WardrobeSheet() {
   const look = useLifeStore((s) => s.look);
   const owned = useLifeStore((s) => s.owned);
@@ -25,9 +26,9 @@ export function WardrobeSheet() {
       <div className="flex items-center gap-4 rounded-2xl bg-sky/60 p-3">
         <LookPreview look={look} height={110} />
         <div>
-          <p className="text-base font-bold text-ink/70">Your coins</p>
-          <p className="text-3xl font-black text-brand">🪙 {coins}</p>
-          <p className="text-sm text-ink/60">Earn coins from lessons, assembly and daily goals.</p>
+          <p className="text-base font-bold text-ink/70">In your wallet</p>
+          <p className="text-3xl font-black text-brand">{formatMoney(coins)}</p>
+          <p className="text-sm text-ink/60">Earn money from part-time jobs, goals and good grades.</p>
         </div>
       </div>
 
@@ -92,9 +93,9 @@ export function WardrobeSheet() {
                         : "Owned"
                       : asking
                         ? item.price > coins
-                          ? `Need ${item.price} 🪙`
-                          : `Tap to buy · ${item.price} 🪙`
-                        : `🪙 ${item.price}`}
+                          ? `Need ${formatMoney(item.price)}`
+                          : `Tap to buy · ${formatMoney(item.price)}`
+                        : formatMoney(item.price)}
                 </span>
               </button>
             </li>

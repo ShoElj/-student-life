@@ -9,11 +9,12 @@ import { createTransport, type RoomTransport } from "@/lib/realtime/channels";
 import type { RoomMode } from "@/lib/session";
 import { playSound, vibrate } from "@/lib/sound";
 import { useLifeStore } from "@/store/lifeStore";
-import { getActivity } from "./activities";
+import { activities, getActivity, jobKeys } from "./activities";
 import { getLifeApi, LifeApiError, type LifeApi } from "./api";
 import { getSchoolTime } from "./clock";
 import { GREETINGS, SOCIAL_RULES } from "./friendship";
 import { getGoal } from "./goals";
+import { formatMoney, LEGACY_COIN_VALUE, PROFILE_VERSION } from "./money";
 import {
   activityBlocker,
   buyOrWear,
@@ -22,8 +23,12 @@ import {
   gradeLetter,
   level,
   mood,
+  moveSavings,
   nearestSpot,
   newProfile,
+  payFor,
+  repairDay,
+  shiftsLeft,
   receiveSocial,
   sendSocial,
   startActivity,
@@ -105,12 +110,30 @@ export function savedLifeSession(): { classCode: string; name: string } | null {
 function normaliseProfile(studentId: string, raw: LifeProfile | null): LifeProfile {
   const fresh = newProfile(studentId, randomStarterLook());
   if (!raw || typeof raw !== "object") return fresh;
+  const money = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.max(0, Math.floor(v)) : 0);
+  // Saves from before money was in Naira held coins: convert them at ₦50 each.
+  const legacy = raw.v !== PROFILE_VERSION;
+  const rate = legacy ? LEGACY_COIN_VALUE : 1;
+  const day = raw.day && typeof raw.day === "object" && raw.day.needs ? repairDay(raw.day) : fresh.day;
+  if (legacy) {
+    day.coinsEarned *= rate;
+    day.moneySpent = 0;
+  }
+  const ledger = Array.isArray(raw.ledger)
+    ? raw.ledger
+        .filter((e) => e && typeof e.label === "string" && Number.isFinite(e.amount) && Number.isFinite(e.at))
+        .map((e) => ({ at: e.at, label: e.label.slice(0, 60), amount: Math.round(e.amount) }))
+        .slice(0, 25)
+    : [];
   return {
+    v: PROFILE_VERSION,
     look: sanitizeLook(raw.look) ?? fresh.look,
-    coins: Number.isFinite(raw.coins) ? Math.max(0, Math.floor(raw.coins)) : fresh.coins,
-    xp: Number.isFinite(raw.xp) ? Math.max(0, Math.floor(raw.xp)) : 0,
+    coins: Number.isFinite(raw.coins) ? money(raw.coins) * rate : fresh.coins,
+    savings: money(raw.savings),
+    ledger,
+    xp: money(raw.xp),
     owned: Array.isArray(raw.owned) ? raw.owned.filter((o) => typeof o === "string") : [],
-    day: raw.day && typeof raw.day === "object" && raw.day.needs ? raw.day : fresh.day,
+    day,
   };
 }
 
@@ -303,7 +326,11 @@ export class LifeClient {
         case "goal_done":
           playSound("winner");
           vibrate([30, 40, 30]);
-          store.toast(`🎯 Goal complete: ${e.text} (+${e.reward} 🪙)`, "good");
+          store.toast(`🎯 Goal complete: ${e.text} (+${formatMoney(e.reward)})`, "good");
+          break;
+        case "money_in":
+          playSound("powerup");
+          store.toast(`💵 ${e.label}: +${formatMoney(e.amount)}`, "good");
           break;
         case "need_low":
           store.toast(
@@ -369,6 +396,23 @@ export class LifeClient {
         needs: { ...day.needs },
         mood: mood(day.needs),
         coins: sim.profile.coins,
+        savings: sim.profile.savings,
+        moneyEarned: day.coinsEarned,
+        moneySpent: day.moneySpent,
+        shiftsLeft: shiftsLeft(day),
+        ledger: sim.profile.ledger.slice(0, 12),
+        jobs: jobKeys.map((key) => {
+          const def = activities[key];
+          return {
+            key,
+            label: def.label,
+            emoji: def.emoji,
+            where: def.job?.where ?? "",
+            pay: payFor(def, sim, this.classmates.size),
+            open: !def.periods || def.periods.includes(time.period.kind),
+            hours: def.closedMessage ?? "",
+          };
+        }),
         xp: sim.profile.xp,
         level: level(sim.profile.xp),
         gradePoints: day.gradePoints,
@@ -400,6 +444,7 @@ export class LifeClient {
                 emoji: spotDef.emoji,
                 durationSec: spotDef.durationSec,
                 cost: spotDef.cost,
+                pay: payFor(spotDef, sim, this.classmates.size),
                 blocker: activityBlocker(sim, spotDef, now),
               }
             : null,
@@ -473,6 +518,22 @@ export class LifeClient {
     }
     store.patch({ look: this.sim.profile.look, owned: [...this.sim.profile.owned] });
     this.sendPresence(true);
+    void this.save(true);
+    this.publishHud(Date.now());
+    return true;
+  }
+
+  /** Moves money between the wallet and savings. */
+  savings(direction: "in" | "out", amount: number): boolean {
+    const result = moveSavings(this.sim, direction, amount);
+    const store = useLifeStore.getState();
+    if (!result.ok) {
+      store.toast(result.reason, "bad");
+      return false;
+    }
+    playSound("button-click");
+    this.handleEvents(result.events ?? []);
+    store.toast(direction === "in" ? `🏦 Saved ${formatMoney(amount)}` : `💵 Took out ${formatMoney(amount)}`, "good");
     void this.save(true);
     this.publishHud(Date.now());
     return true;

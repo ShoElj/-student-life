@@ -7,6 +7,12 @@ export type LifeHud = {
   needs: Needs;
   mood: number;
   coins: number;
+  savings: number;
+  moneyEarned: number;
+  moneySpent: number;
+  shiftsLeft: number;
+  ledger: { at: number; label: string; amount: number }[];
+  jobs: { key: string; label: string; emoji: string; where: string; pay: number; open: boolean; hours: string }[];
   xp: number;
   level: number;
   gradePoints: number;
@@ -18,7 +24,7 @@ export type LifeHud = {
   secondsLeftInPeriod: number;
   goals: { id: string; text: string; value: number; target: number; done: boolean; reward: number }[];
   activity: { key: string; label: string; emoji: string; progress: number } | null;
-  nearSpot: { id: string; label: string; emoji: string; durationSec: number; cost: number; blocker: string | null } | null;
+  nearSpot: { id: string; label: string; emoji: string; durationSec: number; cost: number; pay: number; blocker: string | null } | null;
   nearClassmate: { id: string; name: string } | null;
   onlineCount: number;
 };

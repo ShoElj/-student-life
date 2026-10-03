@@ -9,14 +9,16 @@ import { useMuted } from "@/hooks/useMuted";
 import { useTouchLayout } from "@/hooks/useTouchLayout";
 import { getLifeClient } from "@/lib/life/client";
 import { friendLevel, GREETINGS, SOCIAL_RULES } from "@/lib/life/friendship";
+import { formatMoney } from "@/lib/life/money";
 import { level } from "@/lib/life/sim";
 import type { NeedKey } from "@/lib/life/types";
 import { cn } from "@/lib/utils";
 import { useLifeStore, type LifeHud } from "@/store/lifeStore";
 import { LookAvatar } from "./LookPreview";
+import { WalletSheet } from "./WalletSheet";
 import { WardrobeSheet } from "./WardrobeSheet";
 
-type Sheet = { kind: "goals" } | { kind: "wardrobe" } | { kind: "people" } | { kind: "menu" } | { kind: "talk"; id: string } | null;
+type Sheet = { kind: "goals" } | { kind: "wallet" } | { kind: "wardrobe" } | { kind: "people" } | { kind: "menu" } | { kind: "talk"; id: string } | null;
 
 const NEEDS: { key: NeedKey; emoji: string; label: string }[] = [
   { key: "energy", emoji: "⚡", label: "Energy" },
@@ -68,9 +70,14 @@ function Hud({ hud, onOpen }: { hud: LifeHud; onOpen: (sheet: Sheet) => void }) 
             <span className="hidden sm:inline"> · {formatLeft(hud.secondsLeftInPeriod)} left</span>
           </span>
         </div>
-        <div className={cn(pill, "bg-white text-brand")} aria-label={`${hud.coins} coins`}>
-          🪙 <span className="tabular-nums">{hud.coins}</span>
-        </div>
+        <button
+          type="button"
+          onClick={() => onOpen({ kind: "wallet" })}
+          className={cn(pill, "bg-white text-leaf-dark")}
+          aria-label={`Wallet: ${formatMoney(hud.coins)}`}
+        >
+          👛 <span className="tabular-nums">{formatMoney(hud.coins)}</span>
+        </button>
         <button type="button" onClick={() => onOpen({ kind: "menu" })} className={cn(pill, "ml-auto w-11 justify-center bg-white px-0 text-xl text-brand")} aria-label="Menu">
           ☰
         </button>
@@ -143,7 +150,8 @@ function Actions({ hud, onTalk, touch }: { hud: LifeHud; onTalk: (id: string) =>
             {!touch && <span className="ml-1 text-xs font-bold opacity-60">(E)</span>}
           </span>
           <span className="text-xs font-bold opacity-80">
-            {spot.blocker ?? `${spot.durationSec}s${spot.cost ? ` · ${spot.cost} 🪙` : ""}`}
+            {spot.blocker ??
+            `${spot.durationSec}s${spot.cost ? ` · ${formatMoney(spot.cost)}` : ""}${spot.pay ? ` · earn ${formatMoney(spot.pay)}` : ""}`}
           </span>
         </button>
       )}
@@ -181,14 +189,14 @@ function Toasts() {
 function GoalsSheet({ hud }: { hud: LifeHud }) {
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-base text-ink/70">New goals every school day. Finish them for coins!</p>
+      <p className="text-base text-ink/70">New goals every school day. Finish them to earn money!</p>
       {hud.goals.map((g) => (
         <div key={g.id} className={cn("rounded-2xl p-3", g.done ? "bg-leaf/15" : "bg-ink/5")}>
           <div className="flex items-center justify-between gap-2">
             <p className="text-base font-bold text-ink">
               {g.done ? "✅" : "🎯"} {g.text}
             </p>
-            <span className="shrink-0 text-sm font-black text-brand">+{g.reward} 🪙</span>
+            <span className="shrink-0 text-sm font-black text-leaf-dark">+{formatMoney(g.reward)}</span>
           </div>
           <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-ink/10">
             <div className="h-full rounded-full bg-leaf" style={{ width: `${(g.value / g.target) * 100}%` }} />
@@ -309,7 +317,7 @@ function TalkSheet({ targetId, onDone }: { targetId: string; onDone: () => void 
           className="min-h-14 rounded-2xl bg-sun/40 px-3 text-base font-bold text-ink active:scale-95 disabled:opacity-50"
         >
           🍩 Share a snack
-          <span className="block text-xs font-bold opacity-70">{SOCIAL_RULES.share.cost} 🪙</span>
+          <span className="block text-xs font-bold opacity-70">{formatMoney(SOCIAL_RULES.share.cost)}</span>
         </button>
       </div>
     </div>
@@ -346,8 +354,9 @@ function MenuSheet({ onClose }: { onClose: () => void }) {
       </button>
       <div className="rounded-2xl bg-ink/5 p-3 text-sm text-ink/70">
         <p className="mb-1 font-bold text-ink">How to play</p>
-        Walk to a sign to do an activity. Keep your ⚡🍛😄🤝 bars up, attend lessons for good grades, finish
-        goals for coins, and be kind to classmates to make friends. A school day lasts 10 minutes.
+        Walk to a sign to do an activity. Keep your ⚡🍛😄🤝 bars up and attend lessons for good grades. You get
+        pocket money every morning; earn more from part-time jobs (🧑‍🍳📦🧹🛍️), goals and good report cards, and
+        save some to earn interest. Be kind to classmates to make friends. A school day lasts 10 minutes.
       </div>
       <button
         type="button"
@@ -384,8 +393,9 @@ function ReportCardModal() {
             <p className="text-4xl font-black text-brand">{report.grade}</p>
           </div>
           <div className="rounded-2xl bg-sun/40 p-3">
-            <p className="text-xs font-bold text-ink/60">Coins earned</p>
-            <p className="text-4xl font-black text-ink">{report.coinsEarned}</p>
+            <p className="text-xs font-bold text-ink/60">Money earned</p>
+            <p className="text-2xl font-black text-ink">{formatMoney(report.coinsEarned)}</p>
+            <p className="text-xs font-bold text-ink/60">spent {formatMoney(report.moneySpent ?? 0)}</p>
           </div>
           <div className="rounded-2xl bg-leaf/15 p-3">
             <p className="text-xs font-bold text-ink/60">Goals</p>
@@ -398,7 +408,12 @@ function ReportCardModal() {
             <p className="text-2xl font-black text-ink">{report.mood}%</p>
           </div>
         </div>
-        <p className="mb-4 text-sm text-ink/70">A new day starts soon — you&apos;ll get new goals.</p>
+        {report.bonus > 0 && (
+          <p className="mb-2 rounded-2xl bg-leaf/15 px-3 py-2 text-base font-bold text-leaf-dark">
+            🎁 Reward from home for your {report.grade}: +{formatMoney(report.bonus)}
+          </p>
+        )}
+        <p className="mb-4 text-sm text-ink/70">A new day starts soon — you&apos;ll get pocket money and new goals.</p>
         <button
           type="button"
           onClick={() => getLifeClient()?.closeReport()}
@@ -454,6 +469,11 @@ export function LifeGame() {
       {sheet?.kind === "goals" && hud && (
         <BottomSheet title="Today's goals" onClose={close}>
           <GoalsSheet hud={hud} />
+        </BottomSheet>
+      )}
+      {sheet?.kind === "wallet" && hud && (
+        <BottomSheet title="My money" onClose={close}>
+          <WalletSheet hud={hud} />
         </BottomSheet>
       )}
       {sheet?.kind === "wardrobe" && (

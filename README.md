@@ -18,9 +18,17 @@ Everyone in the school lives in the same world at the same time and can see each
 - **Needs:** Energy, Food, Fun and Friends slowly drop; activities refill them (rest on the
   sofa, jollof rice at the canteen, football, ludo, comics…). Lessons and studying raise the
   day's grade. Mood boosts how much you learn.
-- **Daily goals:** 3 per student per day ("Attend 2 lessons", "Say hi to 3 classmates"…), paid
-  in coins.
-- **Wardrobe:** spend coins on tops, colours, hairstyles and extras; classmates see your outfit.
+- **Daily goals:** 3 per student per day ("Attend 2 lessons", "Work a part-time job", "Put some
+  money in savings"…), each paid in Naira.
+- **Money (₦ Naira):** start with ₦1,500 and get ₦1,000 pocket money every morning. Earn more
+  from part-time jobs (help at the canteen, shelve library books, sweep the classroom after
+  school, sell chin-chin at the corridor stall — busier schools mean more customers), daily
+  goals and a reward from home for an A/B/C report card. Up to 4 shifts a day; job pay rises
+  with your level. Keep money in **savings** to earn 5% interest each night (up to ₦500). The
+  wallet shows today's earnings and spending and a history of every transaction.
+- **Spending:** jollof rice ₦500, puff-puff ₦200, sharing a snack with a friend ₦200, clothes
+  ₦500–₦2,500.
+- **Wardrobe:** spend money on tops, colours, hairstyles and extras; classmates see your outfit.
 - **Friendships:** preset greetings (no free chat), helping with homework in the library,
   sharing snacks and playing football together build friendship levels.
 

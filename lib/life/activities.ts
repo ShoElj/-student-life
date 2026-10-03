@@ -1,7 +1,17 @@
 import type { PeriodKind } from "./clock";
 import type { CounterKey, NeedKey } from "./types";
 
-export type ActivityEffects = Partial<Record<NeedKey, number>> & { grades?: number; xp?: number; coins?: number };
+export type ActivityEffects = Partial<Record<NeedKey, number>> & { grades?: number; xp?: number };
+
+/** A part-time job pays when the shift is finished. */
+export type JobDef = {
+  basePay: number;
+  /** Where on the map the job is, for the wallet's "ways to earn" list. */
+  where: string;
+  /** Extra pay for each classmate at school (customers), up to `maxExtra`. */
+  perClassmate?: number;
+  maxExtra?: number;
+};
 
 export type ActivityDef = {
   key: string;
@@ -10,12 +20,14 @@ export type ActivityDef = {
   emoji: string;
   verb: string;
   durationSec: number;
+  /** Price in Naira, paid when the activity starts. */
   cost: number;
   effects: ActivityEffects;
   /** When set, the activity only works during these periods. */
   periods?: PeriodKind[];
   closedMessage?: string;
   counter?: CounterKey;
+  job?: JobDef;
 };
 
 export const activities: Record<string, ActivityDef> = {
@@ -26,7 +38,7 @@ export const activities: Record<string, ActivityDef> = {
     verb: "at assembly",
     durationSec: 10,
     cost: 0,
-    effects: { social: 8, xp: 10, coins: 5 },
+    effects: { social: 8, xp: 10 },
     periods: ["assembly"],
     closedMessage: "Assembly is in the morning.",
     counter: "assembly",
@@ -38,7 +50,7 @@ export const activities: Record<string, ActivityDef> = {
     verb: "in class",
     durationSec: 20,
     cost: 0,
-    effects: { grades: 12, energy: -6, fun: -3, xp: 15, coins: 5 },
+    effects: { grades: 12, energy: -6, fun: -3, xp: 15 },
     periods: ["lesson"],
     closedMessage: "No lesson right now — study in the library instead.",
     counter: "lessons",
@@ -72,7 +84,7 @@ export const activities: Record<string, ActivityDef> = {
     emoji: "🍛",
     verb: "eating",
     durationSec: 6,
-    cost: 10,
+    cost: 500,
     effects: { hunger: 45, fun: 3 },
     periods: ["break", "after"],
     closedMessage: "The canteen opens at break time.",
@@ -84,7 +96,7 @@ export const activities: Record<string, ActivityDef> = {
     emoji: "🍩",
     verb: "snacking",
     durationSec: 4,
-    cost: 4,
+    cost: 200,
     effects: { hunger: 18, fun: 4 },
     periods: ["break", "after"],
     closedMessage: "The canteen opens at break time.",
@@ -132,7 +144,65 @@ export const activities: Record<string, ActivityDef> = {
     periods: ["break", "after"],
     closedMessage: "Games are for break time and after school.",
   },
+  // Part-time jobs: a way to earn money outside lessons. Only a few shifts a day.
+  canteen_job: {
+    key: "canteen_job",
+    label: "Help at the canteen",
+    emoji: "🧑‍🍳",
+    verb: "serving food",
+    durationSec: 15,
+    cost: 0,
+    effects: { energy: -10, hunger: 10, xp: 5 },
+    periods: ["break", "after"],
+    closedMessage: "The canteen needs helpers at break and after school.",
+    counter: "shifts",
+    job: { basePay: 400, where: "Canteen kitchen" },
+  },
+  library_job: {
+    key: "library_job",
+    label: "Shelve library books",
+    emoji: "📦",
+    verb: "shelving books",
+    durationSec: 12,
+    cost: 0,
+    effects: { energy: -6, fun: -4, xp: 5 },
+    periods: ["assembly", "break", "after"],
+    closedMessage: "The librarian needs help outside lesson time.",
+    counter: "shifts",
+    job: { basePay: 250, where: "Library, by the bookshelf" },
+  },
+  sweep_job: {
+    key: "sweep_job",
+    label: "Sweep the classroom",
+    emoji: "🧹",
+    verb: "sweeping",
+    durationSec: 12,
+    cost: 0,
+    effects: { energy: -10, fun: -5, xp: 4 },
+    periods: ["after"],
+    closedMessage: "Classroom cleaning is after school.",
+    counter: "shifts",
+    job: { basePay: 300, where: "Classroom, near the door" },
+  },
+  snack_stall: {
+    key: "snack_stall",
+    label: "Sell chin-chin",
+    emoji: "🛍️",
+    verb: "selling chin-chin",
+    durationSec: 15,
+    cost: 0,
+    effects: { energy: -6, social: 6, xp: 6 },
+    periods: ["break", "after"],
+    closedMessage: "The snack stall opens at break time.",
+    counter: "shifts",
+    // More classmates at school means more customers.
+    job: { basePay: 200, perClassmate: 100, maxExtra: 500, where: "Corridor, east end" },
+  },
 };
+
+export const jobKeys = Object.values(activities)
+  .filter((a) => a.job)
+  .map((a) => a.key);
 
 export function getActivity(key: string | null | undefined): ActivityDef | null {
   return (key && activities[key]) || null;

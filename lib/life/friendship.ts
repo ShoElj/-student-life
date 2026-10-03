@@ -26,7 +26,7 @@ export type Greeting = (typeof GREETINGS)[number];
 export const SOCIAL_RULES = {
   hi: { friendship: 2, social: 5 },
   help: { friendship: 3, xp: 8, theirGrades: 5, cooldownMs: 60_000 },
-  share: { friendship: 3, cost: 3, theirHunger: 12 },
+  share: { friendship: 3, cost: 200, theirHunger: 12 },
   footballTogether: { friendship: 2, social: 4, range: 160 },
   /** How close two students must be to interact. */
   talkRange: 90,

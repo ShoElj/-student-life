@@ -76,6 +76,7 @@ export const lifeFurniture: Obstacle[] = [
   solid("desk_6", "Desk", 240, 665, 44, 24, "#b45309"),
   solid("sofa", "Sofa", 460, 715, 130, 30, "#7c3aed", "🛋️"),
   solid("ludo_table", "Games table", 600, 550, 60, 40, "#0f766e", "🎲"),
+  solid("snack_stall", "Snack stall", 1120, 314, 64, 18, "#f59e0b", "🧺"),
 ];
 
 export const lifeGeometry: MapGeometry = { zones: lifeZones, solids: lifeFurniture, world: LIFE_WORLD };
@@ -107,6 +108,11 @@ export const lifeSpots: Spot[] = [
   { id: "football", activity: "play_football", x: 1000, y: 615, radius: 200, label: "Football pitch" },
   { id: "rest", activity: "rest", x: 525, y: 680, radius: 70, label: "Sofa" },
   { id: "ludo", activity: "board_games", x: 630, y: 625, radius: 60, label: "Games table" },
+  // Part-time jobs.
+  { id: "canteen_job", activity: "canteen_job", x: 1085, y: 110, radius: 45, label: "Canteen kitchen" },
+  { id: "library_job", activity: "library_job", x: 100, y: 100, radius: 45, label: "Returned books" },
+  { id: "sweep_job", activity: "sweep_job", x: 320, y: 520, radius: 50, label: "Broom cupboard" },
+  { id: "snack_stall", activity: "snack_stall", x: 1152, y: 362, radius: 50, label: "Snack stall" },
 ];
 
 export const LIFE_SPAWN: Point = { x: 640, y: 360 };

@@ -14,7 +14,9 @@ export type CounterKey =
   | "helped"
   | "assembly"
   | "rest"
-  | "friendActs";
+  | "friendActs"
+  | "shifts"
+  | "saved";
 
 export type Counters = Record<CounterKey, number>;
 
@@ -29,14 +31,24 @@ export type DayState = {
   /** Classmates already greeted today (friendship from greetings counts once a day). */
   greeted: string[];
   goals: GoalProgress[];
+  /** Money earned today (₦). */
   coinsEarned: number;
+  moneySpent: number;
   reportShown: boolean;
 };
 
+/** One line of the wallet history: positive is money in, negative is money out. */
+export type LedgerEntry = { at: number; label: string; amount: number };
+
 /** What is saved for each student. */
 export type LifeProfile = {
+  /** Save format version (2 = money in Naira). */
+  v?: number;
   look: Look;
+  /** Money in the wallet, in Naira. */
   coins: number;
+  savings: number;
+  ledger: LedgerEntry[];
   xp: number;
   owned: string[];
   day: DayState;
@@ -62,6 +74,9 @@ export type ReportCard = {
   grade: string;
   gradePoints: number;
   coinsEarned: number;
+  moneySpent: number;
+  /** Reward from home for a good grade. */
+  bonus: number;
   goalsDone: number;
   goalsTotal: number;
   mood: number;
