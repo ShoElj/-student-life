@@ -7,7 +7,17 @@ import { ART_SCALE, drawStudent, STUDENT_HEIGHT, type Look, type StudentFrame, t
 import type { Direction } from "../types";
 import { activities } from "@/lib/life/activities";
 import { friendLevel } from "@/lib/life/friendship";
-import { LIFE_WORLD, lifeDecorations, lifeFurniture, lifeSpots, lifeZones } from "@/lib/life/map";
+import {
+  LIFE_WORLD,
+  lifeDecorations,
+  lifeFurniture,
+  lifeSpots,
+  lifeZones,
+  type Decoration,
+  type FloorPattern,
+  type LifeZone,
+} from "@/lib/life/map";
+import { useLifeStore } from "@/store/lifeStore";
 import type { LifeClient } from "@/lib/life/client";
 
 type PhaserModule = typeof PhaserType;
@@ -94,47 +104,14 @@ export function createLifeScene(Phaser: PhaserModule, getClient: () => LifeClien
       const g = this.add.graphics().setDepth(0);
       g.fillStyle(0x8fcf7a, 1).fillRect(0, 0, LIFE_WORLD.width, LIFE_WORLD.height);
       g.fillStyle(0x7fc06a, 1);
-      for (let i = 0; i < 110; i++) g.fillCircle((i * 137) % LIFE_WORLD.width, (i * 251) % LIFE_WORLD.height, 3 + (i % 3));
+      for (let i = 0; i < 360; i++) g.fillCircle((i * 137) % LIFE_WORLD.width, (i * 251) % LIFE_WORLD.height, 3 + (i % 3));
 
       const ordered = [...lifeZones].sort((a, b) => Number(Boolean(b.isLink)) - Number(Boolean(a.isLink)));
       for (const z of ordered) g.fillStyle(NAVY, 1).fillRoundedRect(z.x - 5, z.y - 5, z.width + 10, z.height + 10, 10);
       for (const z of ordered) g.fillStyle(hex(z.floor), 1).fillRect(z.x, z.y, z.width, z.height);
+      for (const z of lifeZones) if (z.pattern) this.drawFloor(g, z, z.pattern);
 
-      const zone = (key: string) => lifeZones.find((z) => z.key === key)!;
-      // Floor details.
-      const lib = zone("library");
-      g.lineStyle(1, 0xd6c19c, 1);
-      for (let y = lib.y + 20; y < lib.y + lib.height; y += 20) g.lineBetween(lib.x, y, lib.x + lib.width, y);
-      const cls = zone("classroom");
-      g.lineStyle(1, 0xe2c286, 1);
-      for (let y = cls.y + 18; y < cls.y + cls.height; y += 18) g.lineBetween(cls.x, y, cls.x + cls.width, y);
-      const asm = zone("assembly");
-      g.lineStyle(1, 0xbcd6a6, 1);
-      for (let x = asm.x; x < asm.x + asm.width; x += 40) g.lineBetween(x, asm.y, x, asm.y + asm.height);
-      for (let y = asm.y; y < asm.y + asm.height; y += 40) g.lineBetween(asm.x, y, asm.x + asm.width, y);
-      const field = zone("field");
-      for (let x = field.x; x < field.x + field.width; x += 60) {
-        g.fillStyle(0x84c765, 1).fillRect(x, field.y, 30, field.height);
-      }
-      const corridor = zone("corridor");
-      g.lineStyle(1, 0xc3c9d6, 1);
-      for (let x = corridor.x; x < corridor.x + corridor.width; x += 25) g.lineBetween(x, corridor.y, x, corridor.y + corridor.height);
-
-      for (const d of lifeDecorations) {
-        if (d.kind === "pitch") {
-          g.lineStyle(3, 0xffffff, 0.9).strokeRect(d.x, d.y, d.width, d.height);
-          g.lineBetween(d.x + d.width / 2, d.y, d.x + d.width / 2, d.y + d.height);
-          g.strokeCircle(d.x + d.width / 2, d.y + d.height / 2, 40);
-        } else if (d.kind === "goal") {
-          g.lineStyle(4, 0xffffff, 1).strokeRect(d.x, d.y, d.width, d.height);
-        } else if (d.kind === "flag") {
-          g.fillStyle(0x16a34a, 1).fillRect(d.x, d.y, d.width / 3, d.height);
-          g.fillStyle(0xffffff, 1).fillRect(d.x + d.width / 3, d.y, d.width / 3, d.height);
-          g.fillStyle(0x16a34a, 1).fillRect(d.x + (2 * d.width) / 3, d.y, d.width / 3, d.height);
-        } else {
-          g.fillStyle(hex(d.color), 1).fillRoundedRect(d.x, d.y, d.width, d.height, 4);
-        }
-      }
+      for (const d of lifeDecorations) this.drawDecoration(g, d);
 
       for (const o of lifeFurniture) {
         const fg = this.add.graphics().setDepth(1);
@@ -160,6 +137,90 @@ export function createLifeScene(Phaser: PhaserModule, getClient: () => LifeClien
         bg.lineStyle(2, NAVY, 0.6).strokeRoundedRect(-14, -14, 28, 28, 8);
         sign.add([bg, this.add.text(0, 0, def.emoji, { fontSize: "16px" }).setOrigin(0.5)]);
         this.tweens.add({ targets: sign, y: spot.y - 38, duration: 900, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
+      }
+    }
+
+    /** Floor texture for one room. */
+    private drawFloor(g: Graphics, z: LifeZone, pattern: FloorPattern): void {
+      const shade = (amount: number) => {
+        const c = hex(z.floor);
+        const ch = (shift: number) => Math.max(0, Math.min(255, ((c >> shift) & 0xff) + amount));
+        return (ch(16) << 16) | (ch(8) << 8) | ch(0);
+      };
+      const right = z.x + z.width;
+      const bottom = z.y + z.height;
+      if (pattern === "planks") {
+        g.lineStyle(1, shade(-24), 1);
+        for (let y = z.y + 18; y < bottom; y += 18) g.lineBetween(z.x, y, right, y);
+      } else if (pattern === "tiles") {
+        g.lineStyle(1, shade(-18), 1);
+        for (let x = z.x + 25; x < right; x += 25) g.lineBetween(x, z.y, x, bottom);
+        for (let y = z.y + 25; y < bottom; y += 25) g.lineBetween(z.x, y, right, y);
+      } else if (pattern === "grid") {
+        g.lineStyle(1, shade(-22), 1);
+        for (let x = z.x + 40; x < right; x += 40) g.lineBetween(x, z.y, x, bottom);
+        for (let y = z.y + 40; y < bottom; y += 40) g.lineBetween(z.x, y, right, y);
+      } else if (pattern === "stripes") {
+        g.fillStyle(shade(-10), 1);
+        for (let x = z.x; x < right; x += 60) g.fillRect(x, z.y, Math.min(30, right - x), z.height);
+      } else if (pattern === "soil") {
+        g.fillStyle(shade(-20), 1);
+        for (let i = 0; i < (z.width * z.height) / 900; i++) g.fillCircle(z.x + ((i * 97) % z.width), z.y + ((i * 59) % z.height), 2);
+      } else if (pattern === "paving") {
+        g.lineStyle(1, shade(-20), 1);
+        for (let y = z.y + 30; y < bottom; y += 30) {
+          g.lineBetween(z.x, y, right, y);
+          const offset = (y / 30) % 2 === 0 ? 0 : 30;
+          for (let x = z.x + offset; x < right; x += 60) g.lineBetween(x, y - 30, x, y);
+        }
+      } else if (pattern === "court") {
+        g.fillStyle(shade(-8), 1).fillRect(z.x + 10, z.y + 20, z.width - 20, z.height - 30);
+      }
+    }
+
+    private drawDecoration(g: Graphics, d: Decoration): void {
+      if (d.kind === "pitch") {
+        g.lineStyle(3, 0xffffff, 0.9).strokeRect(d.x, d.y, d.width, d.height);
+        g.lineBetween(d.x + d.width / 2, d.y, d.x + d.width / 2, d.y + d.height);
+        g.strokeCircle(d.x + d.width / 2, d.y + d.height / 2, 46);
+      } else if (d.kind === "goal") {
+        g.lineStyle(4, 0xffffff, 1).strokeRect(d.x, d.y, d.width, d.height);
+      } else if (d.kind === "court") {
+        const cx = d.x + d.width / 2;
+        const cy = d.y + d.height / 2;
+        g.lineStyle(3, 0xffffff, 0.9).strokeRect(d.x, d.y, d.width, d.height);
+        g.lineBetween(cx, d.y, cx, d.y + d.height);
+        g.strokeCircle(cx, cy, 40);
+        g.strokeRect(d.x, cy - 50, 70, 100);
+        g.strokeRect(d.x + d.width - 70, cy - 50, 70, 100);
+        g.fillStyle(0xf97316, 1).fillCircle(d.x + 6, cy, 9).fillCircle(d.x + d.width - 6, cy, 9);
+      } else if (d.kind === "crops") {
+        g.fillStyle(0x8b5e34, 1).fillRoundedRect(d.x, d.y, d.width, d.height, 6);
+        g.fillStyle(hex(d.color), 1);
+        for (let y = d.y + 12; y < d.y + d.height - 6; y += 18) {
+          for (let x = d.x + 12; x < d.x + d.width - 6; x += 18) g.fillCircle(x, y, 6);
+        }
+      } else if (d.kind === "flag") {
+        g.fillStyle(0x16a34a, 1).fillRect(d.x, d.y, d.width / 3, d.height);
+        g.fillStyle(0xffffff, 1).fillRect(d.x + d.width / 3, d.y, d.width / 3, d.height);
+        g.fillStyle(0x16a34a, 1).fillRect(d.x + (2 * d.width) / 3, d.y, d.width / 3, d.height);
+      } else if (d.kind === "gate") {
+        g.fillStyle(hex(d.color), 1).fillRect(d.x, d.y, d.width, d.height);
+        g.lineStyle(2, 0xfacc15, 1);
+        for (let y = d.y + 10; y < d.y + d.height; y += 16) g.lineBetween(d.x, y, d.x + d.width, y);
+        this.add.text(d.x - 8, d.y + d.height / 2, "GATE", { fontFamily: FONT, fontSize: "14px", fontStyle: "bold", color: "#1e3a8a" }).setOrigin(1, 0.5).setDepth(1);
+      } else if (d.kind === "sign") {
+        g.fillStyle(hex(d.color), 1).fillRoundedRect(d.x, d.y, d.width, d.height, 6);
+        const school = useLifeStore.getState().me?.className ?? "Our School";
+        this.add
+          .text(d.x + d.width / 2, d.y + d.height / 2, `🏫 ${school}`, { fontFamily: FONT, fontSize: "14px", fontStyle: "bold", color: "#ffffff" })
+          .setOrigin(0.5)
+          .setDepth(1);
+      } else if (d.kind === "notice") {
+        g.fillStyle(hex(d.color), 1).fillRect(d.x, d.y, d.width, d.height);
+        g.fillStyle(0xfef3c7, 1).fillRect(d.x + 6, d.y + 2, 20, 6).fillRect(d.x + 34, d.y + 2, 20, 6).fillRect(d.x + 62, d.y + 2, 20, 6);
+      } else {
+        g.fillStyle(hex(d.color), 1).fillRoundedRect(d.x, d.y, d.width, d.height, 4);
       }
     }
 

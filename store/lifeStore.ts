@@ -26,7 +26,7 @@ export type LifeHud = {
   secondsLeftInPeriod: number;
   goals: { id: string; text: string; value: number; target: number; done: boolean; reward: number }[];
   activity: { key: string; label: string; emoji: string; progress: number } | null;
-  nearSpot: { id: string; label: string; emoji: string; durationSec: number; cost: number; pay: number; opensGames: boolean; blocker: string | null } | null;
+  nearSpot: { id: string; label: string; emoji: string; durationSec: number; cost: number; pay: number; opens: "games" | "shop" | "bank" | null; blocker: string | null } | null;
   nearClassmate: { id: string; name: string } | null;
   onlineCount: number;
 };
@@ -44,6 +44,9 @@ export type GameSession = {
   result?: "win" | "lose" | "draw";
   note?: string;
 };
+
+/** A screen the client asks the game UI to open. */
+export type SheetRequest = "games" | "shop" | "bank";
 
 export type GameInvite = { id: string; kind: GameKind; fromId: string; fromName: string; at: number };
 
@@ -69,7 +72,7 @@ type LifeStore = {
   game: GameSession | null;
   invite: GameInvite | null;
   /** Asks the game screen to open a sheet (e.g. the games table was used). */
-  sheetRequest: "games" | null;
+  sheetRequest: SheetRequest | null;
   patch: (partial: Partial<Omit<LifeStore, "patch" | "toast" | "reset">>) => void;
   toast: (text: string, tone?: LifeToast["tone"]) => void;
   reset: () => void;
@@ -92,7 +95,7 @@ const initial = {
   openThread: null as string | null,
   game: null as GameSession | null,
   invite: null as GameInvite | null,
-  sheetRequest: null as "games" | null,
+  sheetRequest: null as SheetRequest | null,
 };
 
 export const useLifeStore = create<LifeStore>((set) => ({

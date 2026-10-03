@@ -15,6 +15,8 @@ export function WardrobeSheet() {
   const look = useLifeStore((s) => s.look);
   const owned = useLifeStore((s) => s.owned);
   const coins = useLifeStore((s) => s.hud?.coins ?? 0);
+  // New clothes are bought at the School Shop; owned clothes can be changed anywhere.
+  const atShop = useLifeStore((s) => s.hud?.nearSpot?.opens === "shop");
   const [category, setCategory] = useState<WardrobeCategory>("shirt");
   const [confirm, setConfirm] = useState<string | null>(null);
   if (!look) return null;
@@ -31,6 +33,10 @@ export function WardrobeSheet() {
           <p className="text-sm text-ink/60">Earn money from part-time jobs, goals and good grades.</p>
         </div>
       </div>
+
+      <p className={cn("rounded-2xl px-3 py-2 text-sm font-bold", atShop ? "bg-leaf/15 text-leaf-dark" : "bg-sun/30 text-ink/80")}>
+        {atShop ? "🛍️ You're at the School Shop — tap an item to buy it." : "👕 Change into clothes you own here. Visit the School Shop (south corridor) to buy new ones."}
+      </p>
 
       <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1" role="tablist" aria-label="Wardrobe sections">
         {CATEGORIES.map((c) => (
@@ -65,6 +71,7 @@ export function WardrobeSheet() {
                 type="button"
                 aria-pressed={worn}
                 onClick={() => {
+                  if (!has && !atShop) return;
                   if (!has && !asking) return setConfirm(item.id);
                   setConfirm(null);
                   getLifeClient()?.wear(item);
@@ -91,7 +98,9 @@ export function WardrobeSheet() {
                       ? item.category === "extras"
                         ? "Owned · tap to wear"
                         : "Owned"
-                      : asking
+                      : !atShop
+                        ? `${formatMoney(item.price)} at the shop`
+                        : asking
                         ? item.price > coins
                           ? `Need ${formatMoney(item.price)}`
                           : `Tap to buy · ${formatMoney(item.price)}`

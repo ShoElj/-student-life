@@ -13,6 +13,20 @@ name, then pick their own name and 4-digit PIN) and gets a 6-character school co
 friends **join a school** with that code, a name and a PIN (no email or personal data).
 Everyone in the school lives in the same world at the same time and can see each other.
 
+**The school** (tap 🗺️ Map in the game to see it all, with "you are here"):
+
+| Area | Places and what to do there |
+| --- | --- |
+| Outside, north | **School Farm** (water crops — job, pick oranges) · **Assembly Ground** (morning assembly) · **Sports Field** (football, cheer from the stands) · **Basketball Court** |
+| Main Corridor | Lockers, notice board, water tap, chin-chin stall (job) |
+| Middle row | **Classrooms A & B** (lessons, sweeping job) · **Science Lab** (experiments) · **Computer Lab** (coding, fix-the-computers job) · **Library** (study, comics, shelving job) · **Music & Art** (drums, painting) |
+| South Corridor | Joins the south rooms |
+| South row | **Canteen** (jollof, puff-puff, kitchen job) · **Common Room** (two games tables, TV corner, music corner, sofa) · **Sick Bay** (big energy rest) · **School Shop** (buy clothes) · **School Bank** (savings) |
+| Front Yard | **School Gate** (where you arrive, with the school's name on the sign) · **Tuck Shop** (Gala & Fanta) · **Bus Stop** (catch the bus at Home Time) |
+
+New clothes are bought at the School Shop (clothes you own can be changed anywhere), and money
+goes in or out of savings at the School Bank.
+
 - **School day:** 10 real minutes, the same for everyone because it is derived from the clock:
   Morning Assembly → Lesson 1 → Break → Lesson 2 → After School → Home Time (report card).
 - **Needs:** Energy, Food, Fun and Friends slowly drop; activities refill them (rest on the

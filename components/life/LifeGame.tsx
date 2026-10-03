@@ -18,9 +18,10 @@ import { ChatSheet, useUnread } from "./ChatSheet";
 import { GameInviteCard, GamesSheet } from "./GamesSheet";
 import { LookAvatar } from "./LookPreview";
 import { WalletSheet } from "./WalletSheet";
+import { MapSheet } from "./MapSheet";
 import { WardrobeSheet } from "./WardrobeSheet";
 
-type Sheet = { kind: "goals" } | { kind: "wallet" } | { kind: "chat"; thread?: string } | { kind: "games" } | { kind: "wardrobe" } | { kind: "people" } | { kind: "menu" } | { kind: "talk"; id: string } | null;
+type Sheet = { kind: "goals" } | { kind: "wallet" } | { kind: "chat"; thread?: string } | { kind: "games" } | { kind: "map" } | { kind: "wardrobe" } | { kind: "people" } | { kind: "menu" } | { kind: "talk"; id: string } | null;
 
 const NEEDS: { key: NeedKey; emoji: string; label: string }[] = [
   { key: "energy", emoji: "⚡", label: "Energy" },
@@ -93,7 +94,7 @@ function Hud({ hud, onOpen }: { hud: LifeHud; onOpen: (sheet: Sheet) => void }) 
           📝 {hud.gradePoints > 0 ? hud.grade : "–"}
         </span>
       </div>
-      <div className="flex gap-1.5">
+      <div className="flex gap-1.5 [&>button]:shrink-0 [&>button]:whitespace-nowrap">
         <button type="button" onClick={() => onOpen({ kind: "goals" })} className={cn(pill, "h-10 bg-sun text-sm text-ink")}>
           🎯 Goals {goalsDone}/{hud.goals.length}
         </button>
@@ -112,6 +113,9 @@ function Hud({ hud, onOpen }: { hud: LifeHud; onOpen: (sheet: Sheet) => void }) 
         </button>
         <button type="button" onClick={() => onOpen({ kind: "wardrobe" })} className={cn(pill, "h-10 bg-white text-sm text-brand")} aria-label="Wardrobe">
           👕<span className="hidden sm:inline"> Wardrobe</span>
+        </button>
+        <button type="button" onClick={() => onOpen({ kind: "map" })} className={cn(pill, "h-10 bg-white text-sm text-brand")} aria-label="Map">
+          🗺️<span className="hidden sm:inline"> Map</span>
         </button>
         <button type="button" onClick={() => onOpen({ kind: "people" })} className={cn(pill, "h-10 bg-white text-sm text-brand")}>
           👥 {hud.onlineCount}
@@ -167,7 +171,7 @@ function Actions({ hud, onTalk, touch }: { hud: LifeHud; onTalk: (id: string) =>
           </span>
           <span className="text-xs font-bold opacity-80">
             {spot.blocker ??
-              (spot.opensGames ? "Tic-tac-toe & Ayọ" : null) ??
+              (spot.opens === "games" ? "Tic-tac-toe & Ayọ" : spot.opens === "shop" ? "Buy new clothes" : spot.opens === "bank" ? "Save or take out money" : null) ??
             `${spot.durationSec}s${spot.cost ? ` · ${formatMoney(spot.cost)}` : ""}${spot.pay ? ` · earn ${formatMoney(spot.pay)}` : ""}`}
           </span>
         </button>
@@ -463,7 +467,8 @@ export function LifeGame() {
   useEffect(() => {
     if (!sheetRequest) return;
     useLifeStore.getState().patch({ sheetRequest: null });
-    queueMicrotask(() => setSheet({ kind: sheetRequest }));
+    const next: Sheet = sheetRequest === "shop" ? { kind: "wardrobe" } : sheetRequest === "bank" ? { kind: "wallet" } : { kind: "games" };
+    queueMicrotask(() => setSheet(next));
   }, [sheetRequest]);
 
   // Desktop shortcuts: E to do the activity here, T to talk to the nearest classmate.
@@ -516,6 +521,11 @@ export function LifeGame() {
       {sheet?.kind === "games" && (
         <BottomSheet title="Games table" onClose={close}>
           <GamesSheet />
+        </BottomSheet>
+      )}
+      {sheet?.kind === "map" && (
+        <BottomSheet title="School map" onClose={close}>
+          <MapSheet />
         </BottomSheet>
       )}
       {sheet?.kind === "chat" && (

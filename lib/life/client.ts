@@ -40,7 +40,7 @@ import {
   type LifeSim,
 } from "./sim";
 import type { Classmate, LifeProfile, SocialKind } from "./types";
-import { randomStarterLook, sanitizeLook, type WardrobeItem } from "./wardrobe";
+import { isOwned, randomStarterLook, sanitizeLook, type WardrobeItem } from "./wardrobe";
 import { maskRudeWords } from "@/lib/moderation";
 
 const SESSION_KEY = "sbb-life-session";
@@ -481,7 +481,7 @@ export class LifeClient {
                 durationSec: spotDef.durationSec,
                 cost: spotDef.cost,
                 pay: payFor(spotDef, sim, this.classmates.size),
-                opensGames: Boolean(spotDef.opensGames),
+                opens: spotDef.opens ?? null,
                 blocker: activityBlocker(sim, spotDef, now),
               }
             : null,
@@ -500,12 +500,12 @@ export class LifeClient {
     const spot = nearestSpot(this.sim);
     if (!spot) return;
     const def = getActivity(spot.activity);
-    if (def?.opensGames && !this.sim.activity) {
+    if (def?.opens && !this.sim.activity) {
       const blocker = activityBlocker(this.sim, def);
       if (blocker) useLifeStore.getState().toast(blocker, "bad");
       else {
         playSound("button-click");
-        useLifeStore.getState().patch({ sheetRequest: "games" });
+        useLifeStore.getState().patch({ sheetRequest: def.opens });
       }
       return;
     }
@@ -556,9 +556,18 @@ export class LifeClient {
     return true;
   }
 
+  /** True when standing at a place that opens `screen` (e.g. the bank counter). */
+  isAt(screen: "games" | "shop" | "bank"): boolean {
+    return getActivity(nearestSpot(this.sim)?.activity)?.opens === screen;
+  }
+
   wear(item: WardrobeItem): boolean {
-    const result = buyOrWear(this.sim.profile, item);
     const store = useLifeStore.getState();
+    if (!isOwned(item, this.sim.profile.owned) && !this.isAt("shop")) {
+      store.toast("New clothes are sold at the School Shop.", "bad");
+      return false;
+    }
+    const result = buyOrWear(this.sim.profile, item);
     if (!result.ok) {
       store.toast(result.reason, "bad");
       return false;
@@ -867,8 +876,12 @@ export class LifeClient {
 
   /** Moves money between the wallet and savings. */
   savings(direction: "in" | "out", amount: number): boolean {
-    const result = moveSavings(this.sim, direction, amount);
     const store = useLifeStore.getState();
+    if (!this.isAt("bank")) {
+      store.toast("Visit the School Bank to save or take out money.", "bad");
+      return false;
+    }
+    const result = moveSavings(this.sim, direction, amount);
     if (!result.ok) {
       store.toast(result.reason, "bad");
       return false;

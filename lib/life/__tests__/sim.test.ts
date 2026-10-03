@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { DAY_MS, getSchoolTime } from "../clock";
 import { isWalkable } from "@/lib/game/collision";
-import { LIFE_SPAWN, lifeGeometry, lifeSpots } from "../map";
+import { getActivity } from "../activities";
+import { LIFE_SPAWN, LIFE_WORLD, lifeGeometry, lifeSpots } from "../map";
 import { formatMoney, interestFor, jobPay, MAX_SHIFTS_PER_DAY, POCKET_MONEY } from "../money";
 import {
   buyOrWear,
@@ -46,11 +47,55 @@ describe("school clock", () => {
 });
 
 describe("map", () => {
-  it("every activity spot and the spawn point can be reached", () => {
-    expect(isWalkable(LIFE_SPAWN.x, LIFE_SPAWN.y, 12, lifeGeometry.zones, lifeGeometry.solids, lifeGeometry.world)).toBe(true);
-    for (const s of lifeSpots) {
-      expect(isWalkable(s.x, s.y, 12, lifeGeometry.zones, lifeGeometry.solids, lifeGeometry.world), s.id).toBe(true);
+  const free = (x: number, y: number) => isWalkable(x, y, 12, lifeGeometry.zones, lifeGeometry.solids, lifeGeometry.world) === true;
+
+  it("every activity spot and the spawn point stand on open floor", () => {
+    expect(free(LIFE_SPAWN.x, LIFE_SPAWN.y)).toBe(true);
+    for (const s of lifeSpots) expect(free(s.x, s.y), s.id).toBe(true);
+  });
+
+  it("every place in the school can be walked to from the gate", () => {
+    // Flood-fill a 10px grid from the spawn point, the way a student would walk.
+    const STEP = 10;
+    const cols = Math.ceil(LIFE_WORLD.width / STEP);
+    const rows = Math.ceil(LIFE_WORLD.height / STEP);
+    const seen = new Uint8Array(cols * rows);
+    const start = [Math.round(LIFE_SPAWN.x / STEP), Math.round(LIFE_SPAWN.y / STEP)];
+    const queue = [start];
+    seen[start[1] * cols + start[0]] = 1;
+    while (queue.length) {
+      const [cx, cy] = queue.pop()!;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = cx + dx;
+        const ny = cy + dy;
+        if (nx < 0 || ny < 0 || nx >= cols || ny >= rows || seen[ny * cols + nx]) continue;
+        if (!free(nx * STEP, ny * STEP)) continue;
+        seen[ny * cols + nx] = 1;
+        queue.push([nx, ny]);
+      }
     }
+    const reached = (x: number, y: number) => seen[Math.round(y / STEP) * cols + Math.round(x / STEP)] === 1;
+    for (const s of lifeSpots) expect(reached(s.x, s.y), s.id).toBe(true);
+    for (const z of lifeGeometry.zones.filter((z) => z.label)) {
+      expect(reached(z.x + z.width / 2, z.y + z.height / 2) || lifeSpots.some((s) => s.x > z.x && s.x < z.x + z.width && s.y > z.y && s.y < z.y + z.height && reached(s.x, s.y)), z.key).toBe(true);
+    }
+  });
+
+  it("no furniture blocks a doorway", () => {
+    for (const d of lifeGeometry.zones.filter((z) => z.isLink)) {
+      // Doors to the Front Yard are walked through sideways; the rest up and down.
+      const sideways = d.key.endsWith("Yard");
+      const cx = d.x + d.width / 2;
+      const cy = d.y + d.height / 2;
+      const reach = (sideways ? d.width : d.height) / 2 + 30;
+      for (let k = -reach; k <= reach; k += 5) {
+        expect(sideways ? free(cx + k, cy) : free(cx, cy + k), `${d.key} at ${k}`).toBe(true);
+      }
+    }
+  });
+
+  it("every activity on the map exists", () => {
+    for (const s of lifeSpots) expect(getActivity(s.activity), s.id).not.toBeNull();
   });
 });
 

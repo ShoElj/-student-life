@@ -3,7 +3,7 @@
  * jobs, daily goals, money, and the report card at home time. Pure and deterministic for a given
  * `now`.
  */
-import { moveWithCollision } from "@/lib/game/collision";
+import { isWalkable, moveWithCollision } from "@/lib/game/collision";
 import type { Direction, MovementInput } from "@/lib/game/types";
 import { getActivity, type ActivityDef } from "./activities";
 import { getSchoolTime, type Period } from "./clock";
@@ -42,7 +42,7 @@ import { isOwned, type WardrobeItem } from "./wardrobe";
 export const NEED_KEYS: NeedKey[] = ["energy", "hunger", "fun", "social"];
 /** Points lost per real second. A 10-minute day costs roughly a third to a half of each need. */
 export const NEED_DECAY_PER_SEC: Needs = { energy: 0.06, hunger: 0.1, fun: 0.08, social: 0.06 };
-export const LIFE_SPEED = 150;
+export const LIFE_SPEED = 180;
 export const BODY_HALF = 12;
 const LOW_NEED = 20;
 
@@ -167,12 +167,21 @@ function closeDay(profile: LifeProfile, now: number): ReportCard {
   };
 }
 
+/** Somewhere just inside the gate, spread out so names don't pile up. */
+function arrivalPoint(): { x: number; y: number } {
+  for (let i = 0; i < 10; i++) {
+    const x = LIFE_SPAWN.x + Math.round((Math.random() - 0.5) * 160);
+    const y = LIFE_SPAWN.y + Math.round((Math.random() - 0.5) * 120);
+    const { zones, solids, world } = lifeGeometry;
+    if (isWalkable(x, y, BODY_HALF, zones, solids, world) === true) return { x, y };
+  }
+  return { ...LIFE_SPAWN };
+}
+
 export function createSim(studentId: string, profile: LifeProfile, now = Date.now()): LifeSim {
   const sim: LifeSim = {
     studentId,
-    // Spread arrivals along the corridor so names don't pile up.
-    x: LIFE_SPAWN.x + Math.round((Math.random() - 0.5) * 360),
-    y: LIFE_SPAWN.y + Math.round((Math.random() - 0.5) * 36),
+    ...arrivalPoint(),
     facing: "down",
     profile,
     activity: null,
@@ -299,7 +308,7 @@ export type StartResult = { ok: true } | { ok: false; reason: string };
 /** Why an activity can't start right now, or null if it can. */
 export function activityBlocker(sim: LifeSim, def: ActivityDef, now = Date.now()): string | null {
   const period = getSchoolTime(now).period;
-  if (period.kind === "home") return "School is over for today. See you tomorrow!";
+  if (period.kind === "home" && !def.periods?.includes("home")) return "School is over for today. Catch the bus home at the Front Yard!";
   if (!periodAllows(def, period)) return def.closedMessage ?? "Not available right now.";
   if (def.cost > sim.profile.coins) return `You need ${formatMoney(def.cost)}`;
   if (def.job && shiftsLeft(sim.profile.day) === 0) return `You've worked ${MAX_SHIFTS_PER_DAY} shifts today. Time to rest and have fun!`;
@@ -310,7 +319,7 @@ export function startActivity(sim: LifeSim, spotId: string, now = Date.now()): S
   const spot = lifeSpots.find((s) => s.id === spotId);
   const def = getActivity(spot?.activity);
   if (!spot || !def) return { ok: false, reason: "Nothing to do here." };
-  if (def.opensGames) return { ok: false, reason: "Choose a game to play." };
+  if (def.opens) return { ok: false, reason: "Nothing to wait for here." };
   if (Math.hypot(sim.x - spot.x, sim.y - spot.y) > spot.radius) return { ok: false, reason: "Walk closer first." };
   if (sim.activity) return { ok: false, reason: "You're already busy." };
   const blocker = activityBlocker(sim, def, now);
@@ -388,7 +397,7 @@ export function stepLife(
   const a = sim.activity;
   if (a) {
     const def = getActivity(a.key);
-    if (!def || !periodAllows(def, time.period) || time.period.kind === "home") {
+    if (!def || !periodAllows(def, time.period) || (time.period.kind === "home" && !def.periods?.includes("home"))) {
       const cancelled = cancelActivity(sim, def?.closedMessage ?? "Time's up.", now);
       if (cancelled) events.push(cancelled);
     } else {

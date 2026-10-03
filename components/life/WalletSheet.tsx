@@ -21,12 +21,13 @@ export function WalletSheet({ hud }: { hud: LifeHud }) {
   const [tab, setTab] = useState<"wallet" | "earn" | "history">("wallet");
   const [now] = useState(() => Date.now());
   const client = getLifeClient();
+  const atBank = hud.nearSpot?.opens === "bank";
 
   const moveButton = (direction: "in" | "out", amount: number, label: string, available: number) => (
     <button
       key={`${direction}-${label}`}
       type="button"
-      disabled={amount <= 0 || amount > available}
+      disabled={!atBank || amount <= 0 || amount > available}
       onClick={() => client?.savings(direction, amount)}
       className={cn(
         "min-h-11 rounded-xl px-2 text-sm font-bold active:scale-95 disabled:opacity-40",
@@ -77,6 +78,11 @@ export function WalletSheet({ hud }: { hud: LifeHud }) {
 
       {tab === "wallet" && (
         <div className="flex flex-col gap-3">
+          {!atBank && (
+            <p className="rounded-2xl bg-sun/30 px-3 py-2 text-sm font-bold text-ink/80">
+              🏦 Walk to the School Bank (south corridor) to put money in or take it out.
+            </p>
+          )}
           <p className="text-sm text-ink/70">
             Money in savings is safe and grows by <b>{Math.round(SAVINGS_INTEREST_RATE * 100)}% every night</b>
             {hud.savings > 0 && <> (tomorrow: +{formatMoney(interestFor(hud.savings))})</>}. You can take it out any time.
