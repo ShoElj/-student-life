@@ -4,6 +4,9 @@ import type { PeriodKind } from "@/lib/life/clock";
 import type { ChatMessage } from "@/lib/life/api";
 import type { GameKind, Player } from "@/lib/life/games";
 import type { SportKind } from "@/lib/life/sports";
+import type { Streak, WeeklyEvent } from "@/lib/life/events";
+import type { Home } from "@/lib/life/home";
+import type { WorldKey } from "@/lib/life/worlds";
 import type { Needs, ReportCard } from "@/lib/life/types";
 
 export type LifeHud = {
@@ -27,12 +30,29 @@ export type LifeHud = {
   secondsLeftInPeriod: number;
   goals: { id: string; text: string; value: number; target: number; done: boolean; reward: number }[];
   activity: { key: string; label: string; emoji: string; progress: number } | null;
-  nearSpot: { id: string; label: string; emoji: string; durationSec: number; cost: number; pay: number; opens: "games" | "sports" | "shop" | "bank" | null; blocker: string | null } | null;
+  nearSpot: { id: string; label: string; emoji: string; durationSec: number; cost: number; pay: number; opens: SheetRequest | null; blocker: string | null } | null;
   nearClassmate: { id: string; name: string } | null;
   onlineCount: number;
+  world: WorldKey;
+  event: WeeklyEvent | null;
+  streak: Streak | null;
+  home: Home | null;
 };
 
-export type RosterEntry = { id: string; name: string; look: Look | null; online: boolean; friendship: number; nearby: boolean };
+export type RosterStats = { level: number; savings: number; sportsWins: number; roomValue: number };
+
+export type RosterEntry = {
+  id: string;
+  name: string;
+  look: Look | null;
+  online: boolean;
+  friendship: number;
+  nearby: boolean;
+  /** Where they are right now, if online. */
+  world: WorldKey | null;
+  home: Home | null;
+  stats: RosterStats | null;
+};
 
 export type GameSession = {
   id: string;
@@ -47,7 +67,7 @@ export type GameSession = {
 };
 
 /** A screen the client asks the game UI to open. */
-export type SheetRequest = "games" | "sports" | "shop" | "bank";
+export type SheetRequest = "games" | "sports" | "shop" | "bank" | "home" | "furniture";
 
 /** A sports match: both players play the same seeded challenge and compare scores. */
 export type SportMatch = {
@@ -75,6 +95,8 @@ type LifeStore = {
   roster: RosterEntry[];
   toasts: LifeToast[];
   report: ReportCard | null;
+  /** The daily streak card shown on arrival. */
+  streakCard: { count: number; reward: number } | null;
   /** School chat and my private conversations, oldest first. */
   messages: ChatMessage[];
   /** Last message id read in each conversation ("school" or a classmate's id). */
@@ -85,6 +107,8 @@ type LifeStore = {
   openThread: string | null;
   game: GameSession | null;
   match: SportMatch | null;
+  /** Where the student is walking to by themselves (from the map), if anywhere. */
+  walkingTo: string | null;
   /** The sport whose venue the student is at (for the sports sheet). */
   sportVenue: SportKind | null;
   invite: GameInvite | null;
@@ -106,12 +130,14 @@ const initial = {
   roster: [] as RosterEntry[],
   toasts: [] as LifeToast[],
   report: null,
+  streakCard: null as { count: number; reward: number } | null,
   messages: [] as ChatMessage[],
   chatRead: {} as Record<string, number>,
   muted: [] as string[],
   openThread: null as string | null,
   game: null as GameSession | null,
   match: null as SportMatch | null,
+  walkingTo: null as string | null,
   sportVenue: null as SportKind | null,
   invite: null as GameInvite | null,
   sheetRequest: null as SheetRequest | null,

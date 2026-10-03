@@ -238,8 +238,8 @@ describe("money", () => {
     expect(s.profile.day.counters.shifts).toBe(1);
     expect(jobPay(400, 6)).toBe(600);
     const stall = { label: "x", job: { basePay: 200, perClassmate: 100, maxExtra: 500, where: "" } };
-    expect(payFor(stall as never, { profile: { ...s.profile, xp: 0 } }, 2)).toBe(400);
-    expect(payFor(stall as never, { profile: { ...s.profile, xp: 0 } }, 20)).toBe(700);
+    expect(payFor(stall as never, { profile: { ...s.profile, xp: 0 } }, 2, now)).toBe(400);
+    expect(payFor(stall as never, { profile: { ...s.profile, xp: 0 } }, 20, now)).toBe(700);
   });
 
   it("jobs keep their hours and a daily shift limit", () => {

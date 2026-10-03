@@ -21,8 +21,11 @@ export type EnterResult = {
   className: string;
 };
 
+/** What classmates can see of each other (their look, room and a few stats). */
+export type RosterStudent = { id: string; name: string; look: Look | null; home?: unknown; xp?: number; savings?: number; stats?: unknown };
+
 export type Roster = {
-  students: { id: string; name: string; look: Look | null }[];
+  students: RosterStudent[];
   friendships: Record<string, number>;
 };
 
@@ -285,7 +288,15 @@ class LocalLifeApi implements LifeApi {
       .map((s) => {
         const points = cls.friendships[pairKey(me.id, s.id)];
         if (points) friendships[s.id] = points;
-        return { id: s.id, name: s.name, look: s.profile?.look ?? null };
+        return {
+          id: s.id,
+          name: s.name,
+          look: s.profile?.look ?? null,
+          home: s.profile?.home,
+          xp: s.profile?.xp,
+          savings: s.profile?.savings,
+          stats: s.profile?.stats,
+        };
       })
       .sort((a, b) => a.name.localeCompare(b.name));
     return { students, friendships };

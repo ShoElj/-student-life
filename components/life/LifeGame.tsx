@@ -19,10 +19,12 @@ import { GameInviteCard, GamesSheet } from "./GamesSheet";
 import { LookAvatar } from "./LookPreview";
 import { WalletSheet, type WalletTab } from "./WalletSheet";
 import { MapSheet } from "./MapSheet";
+import { HomeSheet } from "./HomeSheet";
+import { EventsList, LeaderboardSheet, StreakCard } from "./Community";
 import { SportsSheet } from "./SportsSheet";
 import { WardrobeSheet } from "./WardrobeSheet";
 
-type Sheet = { kind: "goals" } | { kind: "wallet"; tab?: WalletTab; to?: string } | { kind: "chat"; thread?: string } | { kind: "games" } | { kind: "sports" } | { kind: "map" } | { kind: "wardrobe" } | { kind: "people" } | { kind: "menu" } | { kind: "talk"; id: string } | null;
+type Sheet = { kind: "goals" } | { kind: "wallet"; tab?: WalletTab; to?: string } | { kind: "chat"; thread?: string } | { kind: "games" } | { kind: "sports" } | { kind: "map" } | { kind: "home"; mode: "home" | "furniture" } | { kind: "leaderboard" } | { kind: "events" } | { kind: "wardrobe" } | { kind: "people" } | { kind: "menu" } | { kind: "talk"; id: string } | null;
 
 const NEEDS: { key: NeedKey; emoji: string; label: string }[] = [
   { key: "energy", emoji: "⚡", label: "Energy" },
@@ -83,6 +85,17 @@ function Hud({ hud, onOpen }: { hud: LifeHud; onOpen: (sheet: Sheet) => void }) 
         >
           👛 <span className="tabular-nums">{formatMoney(hud.coins)}</span>
         </button>
+        {hud.event && (
+          <button
+            type="button"
+            onClick={() => onOpen({ kind: "events" })}
+            className={cn(pill, "w-11 justify-center bg-sun px-0 text-xl")}
+            aria-label={`Today: ${hud.event.name}. ${hud.event.description}`}
+            title={`${hud.event.name}: ${hud.event.description}`}
+          >
+            {hud.event.emoji}
+          </button>
+        )}
         <button type="button" onClick={() => onOpen({ kind: "menu" })} className={cn(pill, "ml-auto w-11 justify-center bg-white px-0 text-xl text-brand")} aria-label="Menu">
           ☰
         </button>
@@ -96,8 +109,13 @@ function Hud({ hud, onOpen }: { hud: LifeHud; onOpen: (sheet: Sheet) => void }) 
         </span>
       </div>
       <div className="flex gap-1.5 [&>button]:shrink-0 [&>button]:whitespace-nowrap">
-        <button type="button" onClick={() => onOpen({ kind: "goals" })} className={cn(pill, "h-10 bg-sun text-sm text-ink")}>
-          🎯 Goals {goalsDone}/{hud.goals.length}
+        <button
+          type="button"
+          onClick={() => onOpen({ kind: "goals" })}
+          className={cn(pill, "h-10 bg-sun text-sm text-ink")}
+          aria-label={`Goals: ${goalsDone} of ${hud.goals.length} done`}
+        >
+          🎯<span className="hidden sm:inline"> Goals</span> {goalsDone}/{hud.goals.length}
         </button>
         <button
           type="button"
@@ -172,7 +190,7 @@ function Actions({ hud, onTalk, touch }: { hud: LifeHud; onTalk: (id: string) =>
           </span>
           <span className="text-xs font-bold opacity-80">
             {spot.blocker ??
-              (spot.opens === "games" ? "Tic-tac-toe & Ayọ" : spot.opens === "sports" ? "Play a match" : spot.opens === "shop" ? "Buy new clothes" : spot.opens === "bank" ? "Save or take out money" : null) ??
+              (spot.opens === "games" ? "Tic-tac-toe & Ayọ" : spot.opens === "sports" ? "Play a match" : spot.opens === "shop" ? "Buy new clothes" : spot.opens === "bank" ? "Save or take out money" : spot.opens === "home" ? "Decorate, pet & visit friends" : spot.opens === "furniture" ? "Buy furniture for your room" : null) ??
             `${spot.durationSec}s${spot.cost ? ` · ${formatMoney(spot.cost)}` : ""}${spot.pay ? ` · earn ${formatMoney(spot.pay)}` : ""}`}
           </span>
         </button>
@@ -356,9 +374,10 @@ function TalkSheet({ targetId, onDone, onMessage, onSendMoney }: { targetId: str
   );
 }
 
-function MenuSheet({ onClose }: { onClose: () => void }) {
+function MenuSheet({ onClose, onOpen }: { onClose: () => void; onOpen: (sheet: Sheet) => void }) {
   const [muted, toggleMuted] = useMuted();
   const me = useLifeStore((s) => s.me);
+  const streak = useLifeStore((s) => s.hud?.streak ?? null);
   const router = useRouter();
   const [copied, setCopied] = useState(false);
   const item = "flex min-h-14 w-full items-center gap-3 rounded-2xl bg-ink/5 px-4 text-left text-lg font-bold text-ink active:bg-sun/40";
@@ -381,14 +400,26 @@ function MenuSheet({ onClose }: { onClose: () => void }) {
           </div>
         </div>
       )}
+      {streak && (
+        <p className="rounded-2xl bg-sun/30 px-4 py-2 text-base font-bold text-ink">
+          🔥 {streak.count}-day streak <span className="text-sm font-semibold text-ink/60">· best {streak.best}</span>
+        </p>
+      )}
+      <button type="button" className={item} onClick={() => onOpen({ kind: "leaderboard" })}>
+        <span aria-hidden>🏆</span> Leaderboard
+      </button>
+      <button type="button" className={item} onClick={() => onOpen({ kind: "events" })}>
+        <span aria-hidden>📅</span> This week&apos;s events
+      </button>
       <button type="button" className={item} onClick={toggleMuted} aria-pressed={!muted}>
         <span aria-hidden>{muted ? "🔇" : "🔊"}</span> Sound {muted ? "off" : "on"}
       </button>
       <div className="rounded-2xl bg-ink/5 p-3 text-sm text-ink/70">
         <p className="mb-1 font-bold text-ink">How to play</p>
         Walk to a sign to do an activity. Keep your ⚡🍛😄🤝 bars up and attend lessons for good grades. You get
-        pocket money every morning; earn more from part-time jobs (🧑‍🍳📦🧹🛍️), goals and good report cards, and
-        save some to earn interest. Be kind to classmates to make friends. A school day lasts 10 minutes.
+        pocket money every morning; earn more from part-time jobs, goals and good report cards, and save some to
+        earn interest. Catch the 🚌 bus at the Front Yard to go to town: your home and pet, the market, the bukka,
+        the football park and more. A school day lasts 10 minutes; come back every day for streak rewards.
       </div>
       <button
         type="button"
@@ -467,13 +498,22 @@ export function LifeGame() {
   const sheetRequest = useLifeStore((s) => s.sheetRequest);
   const game = useLifeStore((s) => s.game);
   const match = useLifeStore((s) => s.match);
+  const walkingTo = useLifeStore((s) => s.walkingTo);
 
   // The client asks for the games sheet when the games table is used or an invite is accepted.
   useEffect(() => {
     if (!sheetRequest) return;
     useLifeStore.getState().patch({ sheetRequest: null });
     const next: Sheet =
-      sheetRequest === "shop" ? { kind: "wardrobe" } : sheetRequest === "bank" ? { kind: "wallet" } : sheetRequest === "sports" ? { kind: "sports" } : { kind: "games" };
+      sheetRequest === "shop"
+        ? { kind: "wardrobe" }
+        : sheetRequest === "bank"
+          ? { kind: "wallet" }
+          : sheetRequest === "sports"
+            ? { kind: "sports" }
+            : sheetRequest === "home" || sheetRequest === "furniture"
+              ? { kind: "home", mode: sheetRequest }
+              : { kind: "games" };
     queueMicrotask(() => setSheet(next));
   }, [sheetRequest]);
 
@@ -538,14 +578,38 @@ export function LifeGame() {
           <SportsSheet />
         </BottomSheet>
       )}
+      {walkingTo && (
+        <button
+          type="button"
+          onClick={() => getLifeClient()?.stopWalking()}
+          className="absolute top-[calc(max(0.5rem,env(safe-area-inset-top))+9.5rem)] left-1/2 z-20 min-h-10 -translate-x-1/2 rounded-full border-[3px] border-white bg-brand px-4 text-sm font-black text-white shadow-lg"
+        >
+          🚶 Walking to {walkingTo} · <span className="underline">Stop</span>
+        </button>
+      )}
       {sheet?.kind === "games" && (
         <BottomSheet title="Games table" onClose={close}>
           <GamesSheet />
         </BottomSheet>
       )}
+      {sheet?.kind === "home" && (
+        <BottomSheet title={sheet.mode === "furniture" ? "Furniture shop" : "Your home"} onClose={close}>
+          <HomeSheet mode={sheet.mode} />
+        </BottomSheet>
+      )}
+      {sheet?.kind === "leaderboard" && (
+        <BottomSheet title="Leaderboard" onClose={close}>
+          <LeaderboardSheet />
+        </BottomSheet>
+      )}
+      {sheet?.kind === "events" && (
+        <BottomSheet title="This week" onClose={close}>
+          <EventsList />
+        </BottomSheet>
+      )}
       {sheet?.kind === "map" && (
         <BottomSheet title="School map" onClose={close}>
-          <MapSheet />
+          <MapSheet onWalk={close} />
         </BottomSheet>
       )}
       {sheet?.kind === "chat" && (
@@ -577,11 +641,12 @@ export function LifeGame() {
       )}
       {sheet?.kind === "menu" && (
         <BottomSheet title="Menu" onClose={close}>
-          <MenuSheet onClose={close} />
+          <MenuSheet onClose={close} onOpen={setSheet} />
         </BottomSheet>
       )}
       <GameInviteCard />
       <ReportCardModal />
+      <StreakCard />
     </div>
   );
 }

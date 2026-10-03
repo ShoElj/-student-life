@@ -19,7 +19,7 @@ export const LIFE_WORLD = { width: 2700, height: 1660 } as const;
 export type LifeZoneKey = string;
 
 /** How a floor is drawn. */
-export type FloorPattern = "planks" | "tiles" | "grid" | "stripes" | "soil" | "court" | "paving" | "plain";
+export type FloorPattern = "planks" | "tiles" | "grid" | "stripes" | "soil" | "court" | "paving" | "asphalt" | "plain";
 
 export type LifeZone = Zone<LifeZoneKey> & { pattern?: FloorPattern };
 
@@ -205,7 +205,7 @@ export const lifeGeometry: MapGeometry = { zones: lifeZones, solids: lifeFurnitu
 
 /** Things drawn on the map that do not block movement. */
 export type Decoration = Rect & {
-  kind: "goal" | "pitch" | "board" | "rug" | "flag" | "crops" | "court" | "gate" | "sign" | "notice" | "track" | "chalk";
+  kind: "goal" | "pitch" | "board" | "rug" | "flag" | "crops" | "court" | "gate" | "sign" | "notice" | "track" | "chalk" | "lane" | "zebra" | "garden";
   color: string;
 };
 
@@ -282,7 +282,7 @@ export const lifeSpots: Spot[] = [
   { id: "shop", activity: "school_shop", x: 1780, y: 1500, radius: 80, label: "School Shop" },
   { id: "bank", activity: "school_bank", x: 2160, y: 1500, radius: 80, label: "School Bank" },
   // Front yard.
-  { id: "bus_stop", activity: "go_home", x: 2520, y: 170, radius: 70, label: "Bus stop" },
+  { id: "bus_stop", activity: "bus_to_town", x: 2520, y: 170, radius: 70, label: "Bus stop" },
   { id: "tuck_shop", activity: "tuck_snack", x: 2505, y: 825, radius: 55, label: "Tuck shop" },
   { id: "race", activity: "run_race", x: 2470, y: 530, radius: 70, label: "Running track" },
   { id: "tenten", activity: "play_tenten", x: 2530, y: 1080, radius: 65, label: "Ten-ten circle" },

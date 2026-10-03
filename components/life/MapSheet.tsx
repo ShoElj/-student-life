@@ -3,12 +3,13 @@
 import { useEffect, useState } from "react";
 import { activities } from "@/lib/life/activities";
 import { getLifeClient } from "@/lib/life/client";
-import { LIFE_WORLD, lifeSpots, lifeZones } from "@/lib/life/map";
+import { worlds } from "@/lib/life/worlds";
+import { useLifeStore } from "@/store/lifeStore";
 
 type Dot = { id: string; x: number; y: number; name: string };
 
 /** The whole school with "you are here" and classmates who are at school. */
-export function MapSheet() {
+export function MapSheet({ onWalk }: { onWalk?: () => void }) {
   const [dots, setDots] = useState<{ me: Dot | null; mates: Dot[] }>({ me: null, mates: [] });
 
   useEffect(() => {
@@ -17,7 +18,7 @@ export function MapSheet() {
       if (!client) return;
       setDots({
         me: { id: client.studentId, x: client.sim.x, y: client.sim.y, name: client.name },
-        mates: [...client.classmates.values()].map((c) => ({ id: c.id, x: c.display.x, y: c.display.y, name: c.name })),
+        mates: [...client.classmates.values()].filter((c) => c.world === client.sim.world).map((c) => ({ id: c.id, x: c.display.x, y: c.display.y, name: c.name })),
       });
     };
     read();
@@ -25,8 +26,25 @@ export function MapSheet() {
     return () => clearInterval(t);
   }, []);
 
-  const rooms = lifeZones.filter((z) => !z.isLink);
-  const doors = lifeZones.filter((z) => z.isLink);
+  const world = worlds[useLifeStore((st) => st.hud?.world ?? "school")];
+  const rooms = world.zones.filter((z) => !z.isLink);
+  const walk = (x: number, y: number, label: string) => {
+    if (getLifeClient()?.walkTo({ x, y }, label)) onWalk?.();
+  };
+  // One button per room: walk to its first sign, or to its middle.
+  const places = rooms
+    .filter((z) => z.label && !/corridor|road/i.test(z.label))
+    .map((z) => {
+      const spot = world.spots.find((s) => s.x > z.x && s.x < z.x + z.width && s.y > z.y && s.y < z.y + z.height);
+      return {
+        key: z.key,
+        label: z.label!,
+        emoji: spot ? (activities[spot.activity]?.emoji ?? "📍") : "📍",
+        x: spot?.x ?? z.x + z.width / 2,
+        y: spot?.y ?? z.y + z.height / 2,
+      };
+    });
+  const doors = world.zones.filter((z) => z.isLink);
   const here = dots.me ? rooms.find((z) => dots.me!.x >= z.x && dots.me!.x <= z.x + z.width && dots.me!.y >= z.y && dots.me!.y <= z.y + z.height) : null;
 
   return (
@@ -37,10 +55,10 @@ export function MapSheet() {
       </p>
       <div className="overflow-x-auto rounded-2xl bg-[#8fcf7a] p-1.5">
         <svg
-          viewBox={`0 0 ${LIFE_WORLD.width} ${LIFE_WORLD.height}`}
+          viewBox={`0 0 ${world.size.width} ${world.size.height}`}
           className="h-auto w-full min-w-[34rem]"
           role="img"
-          aria-label={`Map of the school.${here ? ` You are in the ${here.label}.` : ""}`}
+          aria-label={`Map of the ${world.key === "town" ? "town" : "school"}.${here ? ` You are in the ${here.label}.` : ""}`}
         >
           {doors.map((d) => (
             <rect key={d.key} x={d.x} y={d.y} width={d.width} height={d.height} fill={d.floor} />
@@ -60,8 +78,17 @@ export function MapSheet() {
               </text>
             </g>
           ))}
-          {lifeSpots.map((s) => (
-            <text key={s.id} x={s.x} y={s.y + 18} textAnchor="middle" fontSize={44} opacity={0.85}>
+          {world.spots.map((s) => (
+            <text
+              key={s.id}
+              x={s.x}
+              y={s.y + 18}
+              textAnchor="middle"
+              fontSize={44}
+              opacity={0.9}
+              style={{ cursor: "pointer" }}
+              onClick={() => walk(s.x, s.y, s.label)}
+            >
               {activities[s.activity]?.emoji}
             </text>
           ))}
@@ -83,7 +110,24 @@ export function MapSheet() {
           )}
         </svg>
       </div>
-      <p className="text-xs text-ink/50">The bus stop 🚌, tuck shop 🍬 and school gate are in the Front Yard on the right.</p>
+      <p className="text-sm font-bold text-ink/70">Tap a sign on the map, or a place below, and you&apos;ll walk there.</p>
+      <div className="flex flex-wrap gap-1.5">
+        {places.map((p) => (
+          <button
+            key={p.key}
+            type="button"
+            onClick={() => walk(p.x, p.y, p.label)}
+            className="min-h-10 rounded-full bg-sky px-3 text-sm font-bold text-brand active:scale-95"
+          >
+            {p.emoji} {p.label}
+          </button>
+        ))}
+      </div>
+      <p className="text-xs text-ink/50">
+        {world.key === "town"
+          ? "The Bus Park 🚌 on the right takes you back to school."
+          : "The bus stop 🚌 to town, tuck shop 🍬 and school gate are in the Front Yard on the right."}
+      </p>
     </div>
   );
 }

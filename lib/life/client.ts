@@ -8,7 +8,7 @@ import { inputVector, playerInput, resetInput } from "@/lib/game/input";
 import { createTransport, type RoomTransport } from "@/lib/realtime/channels";
 import type { RoomMode } from "@/lib/session";
 import { playSound, vibrate } from "@/lib/sound";
-import { useLifeStore, type GameSession, type SportMatch } from "@/store/lifeStore";
+import { useLifeStore, type GameSession, type RosterEntry, type RosterStats, type SheetRequest, type SportMatch } from "@/store/lifeStore";
 import { generateId } from "@/lib/utils";
 import { activities, getActivity, jobKeys } from "./activities";
 import { getLifeApi, LifeApiError, MAX_MESSAGE_LENGTH, TRANSFER_LIMITS, type ChatMessage, type LifeApi } from "./api";
@@ -16,6 +16,27 @@ import { getSchoolTime } from "./clock";
 import { GREETINGS, SOCIAL_RULES } from "./friendship";
 import { games, isGameKind, replay, type GameKind } from "./games";
 import { getGoal } from "./goals";
+import { dateKey, eventFor } from "./events";
+import {
+  adoptPet,
+  buyFurniture,
+  feedPet,
+  getFurniture,
+  newHome,
+  PET_PLAY_COOLDOWN_MS,
+  pets,
+  placeFurniture,
+  roomValue,
+  sanitizeHome,
+  WALL_COLOURS,
+  type Home,
+  type PetKind,
+  type RoomSlot,
+} from "./home";
+import { isWorldKey, type WorldKey } from "./worlds";
+import { findPath } from "./pathfind";
+import type { Point } from "@/lib/game/types";
+import type { RosterStudent } from "./api";
 import { compareScores, computerScore, isSportKind, seededRandom, sports, type SportKind } from "./sports";
 import { formatMoney, LEGACY_COIN_VALUE, PROFILE_VERSION, receive, spend } from "./money";
 import {
@@ -33,6 +54,8 @@ import {
   nearestSpot,
   newProfile,
   payFor,
+  priceOf,
+  LIFE_SPEED,
   repairDay,
   shiftsLeft,
   receiveSocial,
@@ -80,7 +103,17 @@ type LifeSession = {
   profile: LifeProfile;
 };
 
-type StatePayload = { name: string; look: unknown; x: number; y: number; facing: Direction; activity: string | null; mood: number };
+type StatePayload = {
+  name: string;
+  look: unknown;
+  x: number;
+  y: number;
+  facing: Direction;
+  activity: string | null;
+  mood: number;
+  world?: WorldKey;
+  pet?: string | null;
+};
 type SocialPayload = { to: string; kind: SocialKind; line?: string; friendship?: number | null };
 type ChatPayload = { id: number; to: string | null; body: string; at: number; fromName: string };
 type GamePayload = {
@@ -172,7 +205,20 @@ function normaliseProfile(studentId: string, raw: LifeProfile | null): LifeProfi
     xp: money(raw.xp),
     owned: Array.isArray(raw.owned) ? raw.owned.filter((o) => typeof o === "string") : [],
     day,
+    world: isWorldKey(raw.world) ? raw.world : "school",
+    home: sanitizeHome(raw.home) ?? newHome(),
+    streak:
+      raw.streak && typeof raw.streak.lastDate === "string"
+        ? { count: money(raw.streak.count), lastDate: raw.streak.lastDate, best: money(raw.streak.best) }
+        : undefined,
+    stats: { sportsWins: money(raw.stats?.sportsWins), gamesWins: money(raw.stats?.gamesWins) },
   };
+}
+
+function rosterStats(s: RosterStudent): RosterStats {
+  const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.max(0, v) : 0);
+  const stats = (s.stats ?? {}) as { sportsWins?: unknown };
+  return { level: level(num(s.xp)), savings: num(s.savings), sportsWins: num(stats.sportsWins), roomValue: roomValue(sanitizeHome(s.home)) };
 }
 
 export class LifeClient {
@@ -180,7 +226,7 @@ export class LifeClient {
   readonly classmates = new Map<string, ClassmateView>();
   readonly bubbles = new Map<string, { text: string; until: number }>();
   friendships: Record<string, number> = {};
-  private rosterNames = new Map<string, { name: string; look: LifeProfile["look"] | null }>();
+  private rosterNames = new Map<string, { name: string; look: LifeProfile["look"] | null; home: Home | null; stats: RosterStats }>();
   private api: LifeApi;
   private transport: RoomTransport<LifeMessage>;
   private cleanups: (() => void)[] = [];
@@ -328,7 +374,7 @@ export class LifeClient {
     this.lastFrame = nowPerf;
     const now = Date.now();
     const mates = [...this.classmates.values()];
-    const events = stepLife(this.sim, dt, now, inputVector(playerInput), mates);
+    const events = stepLife(this.sim, dt, now, this.movement(dt), mates);
     this.handleEvents(events);
 
     // Drop classmates who went quiet and glide the rest toward their latest position.
@@ -400,6 +446,15 @@ export class LifeClient {
         case "new_day":
           store.toast("☀️ A new school day has started!", "info");
           break;
+        case "travelled":
+          playSound("break-bell");
+          store.toast(e.world === "town" ? "🚌 Welcome to town! Visit your home, the market and the football park." : "🚌 Back at school!", "info");
+          this.sendPresence(true);
+          void this.save(true);
+          break;
+        case "streak":
+          store.patch({ streakCard: { count: e.count, reward: e.reward } });
+          break;
         default:
           break;
       }
@@ -414,7 +469,7 @@ export class LifeClient {
     const spotDef = getActivity(spot?.activity);
     const activityDef = getActivity(sim.activity?.key);
     const nearest = this.nearestClassmate();
-    const roster = [...this.rosterNames.entries()].map(([id, r]) => {
+    const roster: RosterEntry[] = [...this.rosterNames.entries()].map(([id, r]) => {
       const live = this.classmates.get(id);
       return {
         id,
@@ -422,13 +477,16 @@ export class LifeClient {
         look: live?.look ?? r.look,
         online: Boolean(live),
         friendship: this.friendships[id] ?? 0,
-        nearby: Boolean(live && Math.hypot(live.x - sim.x, live.y - sim.y) <= SOCIAL_RULES.talkRange),
+        nearby: Boolean(live && live.world === sim.world && Math.hypot(live.x - sim.x, live.y - sim.y) <= SOCIAL_RULES.talkRange),
+        world: live?.world ?? null,
+        home: r.home,
+        stats: r.stats,
       };
     });
     // Classmates seen online who joined after the last roster refresh.
     for (const [id, c] of this.classmates) {
       if (!this.rosterNames.has(id)) {
-        roster.push({ id, name: c.name, look: c.look, online: true, friendship: this.friendships[id] ?? 0, nearby: false });
+        roster.push({ id, name: c.name, look: c.look, online: true, friendship: this.friendships[id] ?? 0, nearby: false, world: c.world, home: null, stats: null });
       }
     }
     roster.sort((a, b) => Number(b.online) - Number(a.online) || b.friendship - a.friendship || a.name.localeCompare(b.name));
@@ -450,7 +508,7 @@ export class LifeClient {
             label: def.label,
             emoji: def.emoji,
             where: def.job?.where ?? "",
-            pay: payFor(def, sim, this.classmates.size),
+            pay: payFor(def, sim, this.classmates.size, now),
             open: !def.periods || def.periods.includes(time.period.kind),
             hours: def.closedMessage ?? "",
           };
@@ -485,14 +543,18 @@ export class LifeClient {
                 label: spotDef.label,
                 emoji: spotDef.emoji,
                 durationSec: spotDef.durationSec,
-                cost: spotDef.cost,
-                pay: payFor(spotDef, sim, this.classmates.size),
+                cost: priceOf(spotDef, now),
+                pay: payFor(spotDef, sim, this.classmates.size, now),
                 opens: spotDef.opens ?? null,
                 blocker: activityBlocker(sim, spotDef, now),
               }
             : null,
         nearClassmate: nearest ? { id: nearest.id, name: nearest.name } : null,
         onlineCount: this.classmates.size + 1,
+        world: sim.world,
+        event: eventFor(now),
+        streak: sim.profile.streak ?? null,
+        home: sim.profile.home ?? null,
       },
       roster,
     });
@@ -526,6 +588,7 @@ export class LifeClient {
     let best: ClassmateView | null = null;
     let bestD: number = SOCIAL_RULES.talkRange;
     for (const c of this.classmates.values()) {
+      if (c.world !== this.sim.world) continue;
       const d = Math.hypot(c.x - this.sim.x, c.y - this.sim.y);
       if (d <= bestD) {
         best = c;
@@ -537,7 +600,7 @@ export class LifeClient {
 
   isNear(id: string): boolean {
     const c = this.classmates.get(id);
-    return Boolean(c && Math.hypot(c.x - this.sim.x, c.y - this.sim.y) <= SOCIAL_RULES.talkRange);
+    return Boolean(c && c.world === this.sim.world && Math.hypot(c.x - this.sim.x, c.y - this.sim.y) <= SOCIAL_RULES.talkRange);
   }
 
   async social(kind: SocialKind, targetId: string, line?: string): Promise<boolean> {
@@ -564,7 +627,7 @@ export class LifeClient {
   }
 
   /** True when standing at a place that opens `screen` (e.g. the bank counter). */
-  isAt(screen: "games" | "shop" | "bank"): boolean {
+  isAt(screen: SheetRequest): boolean {
     return getActivity(nearestSpot(this.sim)?.activity)?.opens === screen;
   }
 
@@ -925,6 +988,134 @@ export class LifeClient {
   }
 
   // -------------------------------------------------------------------------
+  // Walking directions
+  // -------------------------------------------------------------------------
+
+  private route: { label: string; points: Point[]; world: WorldKey } | null = null;
+
+  /** Walks the student to a place on the map by themselves. Returns false if there's no way. */
+  walkTo(target: Point, label: string): boolean {
+    const points = findPath(this.sim.world, { x: this.sim.x, y: this.sim.y }, target);
+    if (!points) {
+      useLifeStore.getState().toast("You can't get there from here.", "bad");
+      return false;
+    }
+    this.route = { label, points, world: this.sim.world };
+    useLifeStore.getState().patch({ walkingTo: label });
+    return true;
+  }
+
+  stopWalking(): void {
+    if (!this.route) return;
+    this.route = null;
+    useLifeStore.getState().patch({ walkingTo: null });
+  }
+
+  /** Keyboard or joystick input wins; otherwise follow the route, if any. */
+  private movement(dtMs: number): { dx: number; dy: number } {
+    const manual = inputVector(playerInput);
+    if (Math.hypot(manual.dx, manual.dy) > 0.05) {
+      this.stopWalking();
+      return manual;
+    }
+    const route = this.route;
+    if (!route || route.world !== this.sim.world) {
+      if (route) this.stopWalking();
+      return manual;
+    }
+    let next = route.points[0];
+    while (next && Math.hypot(next.x - this.sim.x, next.y - this.sim.y) < 6) {
+      route.points.shift();
+      next = route.points[0];
+    }
+    if (!next) {
+      this.stopWalking();
+      useLifeStore.getState().toast(`📍 You're at ${route.label}`, "info");
+      return manual;
+    }
+    const dx = next.x - this.sim.x;
+    const dy = next.y - this.sim.y;
+    const len = Math.hypot(dx, dy);
+    // Never step past the waypoint, however long this frame was.
+    const speed = Math.min(1, len / Math.max(1, (LIFE_SPEED * dtMs) / 1000));
+    return { dx: (dx / len) * speed, dy: (dy / len) * speed };
+  }
+
+  // -------------------------------------------------------------------------
+  // Home, furniture and pet
+  // -------------------------------------------------------------------------
+
+  petEmoji(): string | null {
+    const pet = this.sim.profile.home?.pet;
+    return pet ? pets[pet.kind].emoji : null;
+  }
+
+  /** Runs a home change, then saves and refreshes the screen. */
+  private homeAction(where: SheetRequest | null, action: () => { ok: true } | { ok: false; reason: string }, done?: string): boolean {
+    const store = useLifeStore.getState();
+    if (where && !this.isAt(where)) {
+      store.toast(where === "furniture" ? "Furniture is sold at the shop in town." : "Go home first — your house is in town.", "bad");
+      return false;
+    }
+    const result = action();
+    if (!result.ok) {
+      store.toast(result.reason, "bad");
+      return false;
+    }
+    playSound("powerup");
+    if (done) store.toast(done, "good");
+    this.sendPresence(true);
+    void this.save(true);
+    this.publishHud(Date.now());
+    return true;
+  }
+
+  buyFurniture(itemId: string): boolean {
+    const item = getFurniture(itemId);
+    return this.homeAction("furniture", () => buyFurniture(this.sim.profile, itemId), item ? `${item.emoji} ${item.name} is in your room now!` : undefined);
+  }
+
+  placeFurniture(slot: RoomSlot, itemId: string | null): boolean {
+    return this.homeAction("home", () => placeFurniture(this.sim.profile, slot, itemId));
+  }
+
+  paintWall(colour: string): boolean {
+    return this.homeAction("home", () => {
+      if (!WALL_COLOURS.includes(colour)) return { ok: false, reason: "Pick one of the paint colours." };
+      (this.sim.profile.home ??= newHome()).wall = colour;
+      return { ok: true };
+    });
+  }
+
+  adoptPet(kind: PetKind, name: string): boolean {
+    return this.homeAction("home", () => adoptPet(this.sim.profile, kind, name, dateKey(Date.now())), `${pets[kind].emoji} Welcome home, ${name.trim() || pets[kind].name}!`);
+  }
+
+  feedPet(): boolean {
+    const pet = this.sim.profile.home?.pet;
+    return this.homeAction("home", () => feedPet(this.sim.profile, dateKey(Date.now())), pet ? `${pets[pet.kind].emoji} ${pet.name} loved the food!` : undefined);
+  }
+
+  /** Playing with your pet cheers you up (it follows you everywhere). */
+  playWithPet(): boolean {
+    const pet = this.sim.profile.home?.pet;
+    return this.homeAction(
+      null,
+      () => {
+        if (!pet) return { ok: false, reason: "You don't have a pet yet." };
+        const wait = pet.lastPlayed + PET_PLAY_COOLDOWN_MS - Date.now();
+        if (wait > 0) return { ok: false, reason: `${pet.name} needs a rest. Try again in ${Math.ceil(wait / 1000)}s.` };
+        pet.lastPlayed = Date.now();
+        const needs = this.sim.profile.day.needs;
+        needs.fun = Math.min(100, needs.fun + 10);
+        needs.social = Math.min(100, needs.social + 4);
+        return { ok: true };
+      },
+      pet ? `${pets[pet.kind].emoji} You played with ${pet.name}! +10 fun` : undefined,
+    );
+  }
+
+  // -------------------------------------------------------------------------
   // Sending money
   // -------------------------------------------------------------------------
 
@@ -1136,7 +1327,7 @@ export class LifeClient {
 
   private sendPresence(force: boolean): void {
     const sim = this.sim;
-    const key = `${Math.round(sim.x)},${Math.round(sim.y)},${sim.facing},${sim.activity?.key ?? this.playingActivity() ?? ""}`;
+    const key = `${sim.world},${Math.round(sim.x)},${Math.round(sim.y)},${sim.facing},${sim.activity?.key ?? this.playingActivity() ?? ""}`;
     const now = Date.now();
     const changed = key !== this.lastPresenceKey;
     if (!force && now - this.lastPresence < (changed ? PRESENCE_MOVING_MS : PRESENCE_IDLE_MS)) return;
@@ -1150,6 +1341,8 @@ export class LifeClient {
       facing: sim.facing,
       activity: sim.activity?.key ?? this.playingActivity(),
       mood: mood(sim.profile.day.needs),
+      world: sim.world,
+      pet: this.petEmoji(),
     });
   }
 
@@ -1175,6 +1368,8 @@ export class LifeClient {
         activity: getActivity(p.activity) ? p.activity : null,
         mood: Number(p.mood) || 0,
         lastSeen: Date.now(),
+        world: isWorldKey(p.world) ? p.world : "school",
+        pet: typeof p.pet === "string" && Object.values(pets).some((x) => x.emoji === p.pet) ? p.pet : null,
         display: existing?.display ?? { x: p.x, y: p.y },
       });
       if (isNew) {
@@ -1244,7 +1439,9 @@ export class LifeClient {
   private async refreshRoster(): Promise<void> {
     try {
       const roster = await this.api.roster(this.session.token);
-      this.rosterNames = new Map(roster.students.map((s) => [s.id, { name: s.name, look: sanitizeLook(s.look) }]));
+      this.rosterNames = new Map(
+        roster.students.map((s) => [s.id, { name: s.name, look: sanitizeLook(s.look), home: sanitizeHome(s.home) ?? null, stats: rosterStats(s) }]),
+      );
       this.friendships = { ...this.friendships, ...roster.friendships };
     } catch (e) {
       if (e instanceof LifeApiError && e.message.includes("signed in somewhere else")) this.signedOutElsewhere();

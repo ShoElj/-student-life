@@ -1,5 +1,6 @@
 import type { PeriodKind } from "./clock";
 import type { SportKind } from "./sports";
+import type { WorldKey } from "./worlds";
 import type { CounterKey, NeedKey } from "./types";
 
 export type ActivityEffects = Partial<Record<NeedKey, number>> & { grades?: number; xp?: number };
@@ -30,9 +31,13 @@ export type ActivityDef = {
   counter?: CounterKey;
   job?: JobDef;
   /** Opens a screen (games table, sports, shop, bank) instead of running a timed activity. */
-  opens?: "games" | "sports" | "shop" | "bank";
+  opens?: "games" | "sports" | "shop" | "bank" | "home" | "furniture";
   /** For `opens: "sports"`: which sport is played here. */
   sport?: SportKind;
+  /** Taking the bus: when the wait is over the student arrives in this world. */
+  travelTo?: WorldKey;
+  /** Weekly events can make tagged activities cheaper or free. */
+  tag?: "market" | "bukka" | "viewing";
 };
 
 export const activities: Record<string, ActivityDef> = {
@@ -422,17 +427,163 @@ export const activities: Record<string, ActivityDef> = {
     closedMessage: "The tuck shop is open before assembly, at break and after school.",
     counter: "snacks",
   },
-  go_home: {
-    key: "go_home",
-    label: "Catch the bus home",
+  bus_to_town: {
+    key: "bus_to_town",
+    label: "Catch the bus to town",
     emoji: "🚌",
     verb: "waiting for the bus",
-    durationSec: 5,
+    durationSec: 4,
     cost: 0,
-    effects: { energy: 10, fun: 5 },
-    periods: ["home"],
-    closedMessage: "The school bus leaves at Home Time.",
+    effects: {},
+    travelTo: "town",
   },
+  // ---- Town --------------------------------------------------------------
+  bus_to_school: {
+    key: "bus_to_school",
+    label: "Catch the bus to school",
+    emoji: "🚌",
+    verb: "waiting for the bus",
+    durationSec: 4,
+    cost: 0,
+    effects: {},
+    travelTo: "school",
+  },
+  my_room: {
+    key: "my_room",
+    label: "Go to your room",
+    emoji: "🏠",
+    verb: "at home",
+    durationSec: 0,
+    cost: 0,
+    effects: {},
+    opens: "home",
+  },
+  sleep_home: {
+    key: "sleep_home",
+    label: "Sleep in your bed",
+    emoji: "😴",
+    verb: "sleeping",
+    durationSec: 18,
+    cost: 0,
+    effects: { energy: 50 },
+    counter: "rest",
+  },
+  salon_look: {
+    key: "salon_look",
+    label: "Get a new look",
+    emoji: "💇",
+    verb: "at the salon",
+    durationSec: 0,
+    cost: 0,
+    effects: {},
+    opens: "shop",
+  },
+  salon_job: {
+    key: "salon_job",
+    label: "Sweep the salon",
+    emoji: "🧹",
+    verb: "sweeping the salon",
+    durationSec: 12,
+    cost: 0,
+    effects: { energy: -8, fun: -2, xp: 4 },
+    counter: "shifts",
+    job: { basePay: 250, where: "Barber & Salon, in town" },
+  },
+  supermarket_snack: {
+    key: "supermarket_snack",
+    label: "Buy biscuits & a drink",
+    emoji: "🛒",
+    verb: "snacking",
+    durationSec: 5,
+    cost: 250,
+    effects: { hunger: 25, fun: 4 },
+    counter: "snacks",
+  },
+  furniture_shop: {
+    key: "furniture_shop",
+    label: "Shop for furniture",
+    emoji: "🛋️",
+    verb: "shopping",
+    durationSec: 0,
+    cost: 0,
+    effects: {},
+    opens: "furniture",
+  },
+  viewing_match: {
+    key: "viewing_match",
+    label: "Watch the match",
+    emoji: "📺",
+    verb: "watching the match",
+    durationSec: 15,
+    cost: 100,
+    effects: { fun: 22, social: 6 },
+    tag: "viewing",
+  },
+  mama_put: {
+    key: "mama_put",
+    label: "Eat at Mama Put",
+    emoji: "🍲",
+    verb: "eating",
+    durationSec: 6,
+    cost: 350,
+    effects: { hunger: 42, fun: 3 },
+    counter: "meals",
+    tag: "market",
+  },
+  buy_fruit: {
+    key: "buy_fruit",
+    label: "Buy fruit",
+    emoji: "🍌",
+    verb: "eating fruit",
+    durationSec: 4,
+    cost: 150,
+    effects: { hunger: 15, fun: 4 },
+    counter: "snacks",
+    tag: "market",
+  },
+  market_stall: {
+    key: "market_stall",
+    label: "Sell at the market",
+    emoji: "🧺",
+    verb: "selling at the market",
+    durationSec: 15,
+    cost: 0,
+    effects: { energy: -8, social: 6, xp: 6 },
+    counter: "shifts",
+    job: { basePay: 300, perClassmate: 100, maxExtra: 400, where: "Market, in town" },
+  },
+  eat_together: {
+    key: "eat_together",
+    label: "Eat at the bukka",
+    emoji: "🍛",
+    verb: "eating at the bukka",
+    durationSec: 10,
+    cost: 600,
+    effects: { hunger: 50, social: 12, fun: 5 },
+    counter: "meals",
+    tag: "bukka",
+  },
+  park_football: {
+    key: "park_football",
+    label: "Play football",
+    emoji: "⚽",
+    verb: "playing football",
+    durationSec: 0,
+    cost: 0,
+    effects: {},
+    opens: "sports",
+    sport: "football",
+  },
+  relax_square: {
+    key: "relax_square",
+    label: "Relax in the square",
+    emoji: "🕊️",
+    verb: "relaxing",
+    durationSec: 10,
+    cost: 0,
+    effects: { energy: 15, fun: 6, social: 3 },
+  },
+
 };
 
 export const jobKeys = Object.values(activities)

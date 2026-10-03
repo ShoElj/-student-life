@@ -24,6 +24,25 @@ Everyone in the school lives in the same world at the same time and can see each
 | South row | **Canteen** (jollof, puff-puff, kitchen job) · **Common Room** (two games tables, table tennis, TV corner, music corner, sofa) · **Sick Bay** (big energy rest) · **School Shop** (buy clothes) · **School Bank** (savings) |
 | Front Yard | **School Gate** (where you arrive, with the school's name on the sign) · **Tuck Shop** (Gala & Fanta) · **Running track** (100 m sprint) · **Ten-ten circle** · **Bus Stop** (catch the bus at Home Time) |
 
+**The town** — catch the 🚌 bus from the school's Front Yard (any time, even after school) to the
+neighbourhood: **Your Home** (your own room to decorate, a pet, a bed to sleep in), **Barber &
+Salon**, **Supermarket & Furniture**, **Viewing Centre**, **Town Bank**, **Market** (Mama Put, fruit,
+a stall to work at), **Mama's Bukka**, **Football Park** and the **Church & Mosque Square**. The bus
+in the Bus Park takes you back. The town never closes.
+
+**Coming back every day:**
+- **Daily streak:** the first visit each calendar day pays a bonus that grows every day in a row
+  (₦200, ₦400 … ₦1,400, plus ₦1,000 on every 7th day).
+- **Weekly events:** Family Sunday (double pocket money), Market Monday (half price at the market),
+  Sports Wednesday (double XP from sports), Treat Thursday (half price at the bukka), Movie Friday
+  (free viewing centre) and Super Saturday (jobs pay 50% more).
+- **Your room and pet:** buy furniture at the furniture shop (it goes straight into your room), paint
+  the walls, adopt a rabbit, cat, dog or parrot that follows you everywhere — and feed it every day.
+  Visit classmates' rooms from your home.
+- **Leaderboards:** level, savings, sports wins and best room in your school (migration 006 shares
+  just these with classmates).
+- **Walking directions:** tap a sign or a place on the 🗺️ map and your student walks there.
+
 New clothes are bought at the School Shop (clothes you own can be changed anywhere), and money
 goes in or out of savings at the School Bank.
 
@@ -64,7 +83,7 @@ goes in or out of savings at the School Bank.
 - **Friendships:** greetings, helping with homework in the library, sharing snacks, playing
   football and table games together build friendship levels.
 
-Online, accounts, saves, messages and money transfers live in Supabase (`supabase/migrations/002`–`005`): PINs
+Online, accounts, saves, messages and money transfers live in Supabase (`supabase/migrations/002`–`006`): PINs
 are bcrypt-hashed in the database, 5 wrong PINs lock the name for 5 minutes, and the tables are
 only reachable through functions that check a per-student session token. Positions and social
 actions use Realtime broadcast on `life:{classCode}`. In demo mode the same rules run on
@@ -95,7 +114,7 @@ npm run test       # Vitest: rules, scoring, collision, bots
 ## Online multiplayer (Supabase)
 
 1. Create a Supabase project.
-2. Run the files in `supabase/migrations/` (001–005) in order in the SQL editor.
+2. Run the files in `supabase/migrations/` (001–006) in order in the SQL editor.
 3. Copy `.env.example` to `.env.local` and fill in:
 
    ```

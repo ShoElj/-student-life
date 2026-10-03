@@ -1,5 +1,8 @@
 import type { Look } from "@/lib/game/art/students";
 import type { Direction } from "@/lib/game/types";
+import type { Streak } from "./events";
+import type { Home } from "./home";
+import type { WorldKey } from "./worlds";
 
 export type NeedKey = "energy" | "hunger" | "fun" | "social";
 export type Needs = Record<NeedKey, number>;
@@ -54,9 +57,14 @@ export type LifeProfile = {
   xp: number;
   owned: string[];
   day: DayState;
+  /** Where the student was when they last saved. */
+  world?: WorldKey;
+  home?: Home;
+  streak?: Streak;
+  stats?: { sportsWins: number; gamesWins: number };
 };
 
-export type ActivityState = { key: string; spotId: string; elapsedMs: number; durationMs: number };
+export type ActivityState = { key: string; spotId: string; elapsedMs: number; durationMs: number; /** What was paid, refunded if cancelled. */ paid?: number };
 
 /** A classmate seen through the realtime channel. */
 export type Classmate = {
@@ -69,6 +77,9 @@ export type Classmate = {
   activity: string | null;
   mood: number;
   lastSeen: number;
+  world: WorldKey;
+  /** Pet emoji following them around, if any. */
+  pet: string | null;
 };
 
 export type ReportCard = {

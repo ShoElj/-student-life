@@ -10,7 +10,10 @@ import { getSchoolTime, type Period } from "./clock";
 import { SOCIAL_RULES } from "./friendship";
 import { getGoal, pickGoals } from "./goals";
 import { SPORT_MIN_ENERGY, sports, type SportKind } from "./sports";
-import { LIFE_SPAWN, lifeGeometry, lifeSpots, type Spot } from "./map";
+import { eventFor, visit } from "./events";
+import { newHome } from "./home";
+import type { Spot } from "./map";
+import { worlds, type WorldKey } from "./worlds";
 import {
   earn,
   formatMoney,
@@ -56,7 +59,9 @@ export type LifeEvent =
   | { kind: "need_low"; need: NeedKey }
   | { kind: "report_card"; report: ReportCard }
   | { kind: "money_in"; label: string; amount: number }
-  | { kind: "new_day"; dayIndex: number };
+  | { kind: "new_day"; dayIndex: number }
+  | { kind: "travelled"; world: WorldKey }
+  | { kind: "streak"; count: number; reward: number };
 
 export type LifeSim = {
   studentId: string;
@@ -68,6 +73,10 @@ export type LifeSim = {
   lastPeriodKey: string | null;
   lowWarned: NeedKey[];
   helpCooldowns: Record<string, number>;
+  /** School or town. */
+  world: WorldKey;
+  /** Events raised outside a step (e.g. the daily streak on arrival), sent with the next step. */
+  pending: LifeEvent[];
 };
 
 const clamp = (v: number, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, v));
@@ -127,6 +136,9 @@ export function newProfile(studentId: string, look: LifeProfile["look"], now = D
     xp: 0,
     owned: [],
     day: newDay(getSchoolTime(now).dayIndex, studentId),
+    world: "school",
+    home: newHome(),
+    stats: { sportsWins: 0, gamesWins: 0 },
   };
 }
 
@@ -169,20 +181,31 @@ function closeDay(profile: LifeProfile, now: number): ReportCard {
 }
 
 /** Somewhere just inside the gate, spread out so names don't pile up. */
-function arrivalPoint(): { x: number; y: number } {
+function arrivalPoint(worldKey: WorldKey): { x: number; y: number } {
+  const { spawn, geometry } = worlds[worldKey];
   for (let i = 0; i < 10; i++) {
-    const x = LIFE_SPAWN.x + Math.round((Math.random() - 0.5) * 160);
-    const y = LIFE_SPAWN.y + Math.round((Math.random() - 0.5) * 120);
-    const { zones, solids, world } = lifeGeometry;
-    if (isWalkable(x, y, BODY_HALF, zones, solids, world) === true) return { x, y };
+    const x = spawn.x + Math.round((Math.random() - 0.5) * 160);
+    const y = spawn.y + Math.round((Math.random() - 0.5) * 120);
+    if (isWalkable(x, y, BODY_HALF, geometry.zones, geometry.solids, geometry.world) === true) return { x, y };
   }
-  return { ...LIFE_SPAWN };
+  return { ...spawn };
+}
+
+/** Rides the bus: arrive at the other world's bus stop. */
+export function travel(sim: LifeSim, to: WorldKey): void {
+  sim.world = to;
+  sim.profile.world = to;
+  Object.assign(sim, arrivalPoint(to));
+  sim.facing = "down";
 }
 
 export function createSim(studentId: string, profile: LifeProfile, now = Date.now()): LifeSim {
+  const world: WorldKey = profile.world === "town" ? "town" : "school";
   const sim: LifeSim = {
     studentId,
-    ...arrivalPoint(),
+    world,
+    pending: [],
+    ...arrivalPoint(world),
     facing: "down",
     profile,
     activity: null,
@@ -192,9 +215,18 @@ export function createSim(studentId: string, profile: LifeProfile, now = Date.no
   };
   // A student returning on a later day starts that day fresh (no report for days they missed).
   const today = getSchoolTime(now).dayIndex;
-  if (profile.day?.dayIndex !== today) startDay(sim, today, now);
+  if (profile.day?.dayIndex !== today) sim.pending.push(...startDay(sim, today, now));
   else repairDay(profile.day);
+  sim.pending.push(...checkStreak(sim, now));
   return sim;
+}
+
+/** Rewards coming back on a new calendar day. */
+function checkStreak(sim: LifeSim, now: number): LifeEvent[] {
+  const result = visit(sim.profile, now);
+  if (!result) return [];
+  earn(sim.profile, result.reward, result.count > 1 ? `Day ${result.count} streak bonus` : "Welcome bonus", now);
+  return [{ kind: "streak", count: result.count, reward: result.reward }];
 }
 
 /** A new school day: fresh needs and goals, overnight interest on savings and pocket money. */
@@ -209,8 +241,10 @@ function startDay(sim: LifeSim, dayIndex: number, now: number): LifeEvent[] {
     record(profile, "Interest on savings", interest, now);
     events.push({ kind: "money_in", label: "Interest on your savings", amount: interest });
   }
-  earn(profile, POCKET_MONEY, "Pocket money", now);
-  events.push({ kind: "money_in", label: "Pocket money", amount: POCKET_MONEY });
+  const pocket = POCKET_MONEY * (eventFor(now)?.pocketMoney ?? 1);
+  earn(profile, pocket, "Pocket money", now);
+  events.push({ kind: "money_in", label: "Pocket money", amount: pocket });
+  events.push(...checkStreak(sim, now));
   return events;
 }
 
@@ -220,10 +254,19 @@ export function shiftsLeft(day: DayState): number {
 }
 
 /** What a job pays right now (more experience and more customers pay more). */
-export function payFor(def: ActivityDef, sim: Pick<LifeSim, "profile">, classmatesAtSchool: number): number {
+export function payFor(def: ActivityDef, sim: Pick<LifeSim, "profile">, classmatesAtSchool: number, now = Date.now()): number {
   if (!def.job) return 0;
   const extra = Math.min(def.job.maxExtra ?? 0, (def.job.perClassmate ?? 0) * classmatesAtSchool);
-  return jobPay(def.job.basePay + extra, level(sim.profile.xp));
+  const boost = eventFor(now)?.jobPay ?? 1;
+  return Math.round(jobPay(def.job.basePay + extra, level(sim.profile.xp)) * boost);
+}
+
+/** What an activity costs today (weekly events make some things cheaper or free). */
+export function priceOf(def: ActivityDef, now = Date.now()): number {
+  const event = eventFor(now);
+  if (def.tag && event?.free === def.tag) return 0;
+  if (def.tag && event?.halfPrice === def.tag) return Math.round(def.cost / 2);
+  return def.cost;
 }
 
 function bump(sim: LifeSim, counter: CounterKey, by = 1): void {
@@ -276,7 +319,7 @@ function applyActivity(sim: LifeSim, def: ActivityDef, classmatesAtSchool: numbe
     parts.push(`+${xp} XP`);
   }
   if (def.job) {
-    const pay = payFor(def, sim, classmatesAtSchool);
+    const pay = payFor(def, sim, classmatesAtSchool, now);
     earn(sim.profile, pay, `Job: ${def.label}`, now);
     parts.unshift(`+${formatMoney(pay)}`);
   }
@@ -284,15 +327,20 @@ function applyActivity(sim: LifeSim, def: ActivityDef, classmatesAtSchool: numbe
   return parts.join(" · ");
 }
 
+/** Outside lessons hours the school closes, except for the bus; the town never closes. */
+function schoolClosed(world: WorldKey, def: ActivityDef, period: Period): boolean {
+  return world === "school" && period.kind === "home" && !def.travelTo && !def.periods?.includes("home");
+}
+
 function periodAllows(def: ActivityDef, period: Period): boolean {
   return !def.periods || def.periods.includes(period.kind);
 }
 
 /** The activity spot the student is standing at, if any (closest first). */
-export function nearestSpot(sim: Pick<LifeSim, "x" | "y">): Spot | null {
+export function nearestSpot(sim: Pick<LifeSim, "x" | "y" | "world">): Spot | null {
   let best: Spot | null = null;
   let bestScore = Infinity;
-  for (const spot of lifeSpots) {
+  for (const spot of worlds[sim.world].spots) {
     const d = Math.hypot(sim.x - spot.x, sim.y - spot.y);
     if (d > spot.radius) continue;
     const score = d / spot.radius;
@@ -309,15 +357,16 @@ export type StartResult = { ok: true } | { ok: false; reason: string };
 /** Why an activity can't start right now, or null if it can. */
 export function activityBlocker(sim: LifeSim, def: ActivityDef, now = Date.now()): string | null {
   const period = getSchoolTime(now).period;
-  if (period.kind === "home" && !def.periods?.includes("home")) return "School is over for today. Catch the bus home at the Front Yard!";
+  if (schoolClosed(sim.world, def, period)) return "School is over for today. Catch the bus to town at the Front Yard!";
   if (!periodAllows(def, period)) return def.closedMessage ?? "Not available right now.";
-  if (def.cost > sim.profile.coins) return `You need ${formatMoney(def.cost)}`;
+  const price = priceOf(def, now);
+  if (price > sim.profile.coins) return `You need ${formatMoney(price)}`;
   if (def.job && shiftsLeft(sim.profile.day) === 0) return `You've worked ${MAX_SHIFTS_PER_DAY} shifts today. Time to rest and have fun!`;
   return null;
 }
 
 export function startActivity(sim: LifeSim, spotId: string, now = Date.now()): StartResult {
-  const spot = lifeSpots.find((s) => s.id === spotId);
+  const spot = worlds[sim.world].spots.find((s) => s.id === spotId);
   const def = getActivity(spot?.activity);
   if (!spot || !def) return { ok: false, reason: "Nothing to do here." };
   if (def.opens) return { ok: false, reason: "Nothing to wait for here." };
@@ -325,8 +374,9 @@ export function startActivity(sim: LifeSim, spotId: string, now = Date.now()): S
   if (sim.activity) return { ok: false, reason: "You're already busy." };
   const blocker = activityBlocker(sim, def, now);
   if (blocker) return { ok: false, reason: blocker };
-  spend(sim.profile, def.cost, def.label, now);
-  sim.activity = { key: def.key, spotId, elapsedMs: 0, durationMs: def.durationSec * 1000 };
+  const price = priceOf(def, now);
+  spend(sim.profile, price, def.label, now);
+  sim.activity = { key: def.key, spotId, elapsedMs: 0, durationMs: def.durationSec * 1000, paid: price };
   return { ok: true };
 }
 
@@ -334,7 +384,7 @@ export function cancelActivity(sim: LifeSim, reason: string, now = Date.now()): 
   const a = sim.activity;
   if (!a) return null;
   const def = getActivity(a.key);
-  if (def) refund(sim.profile, def.cost, `Refund: ${def.label}`, now);
+  if (def) refund(sim.profile, a.paid ?? def.cost, `Refund: ${def.label}`, now);
   sim.activity = null;
   return { kind: "activity_cancelled", key: a.key, reason };
 }
@@ -347,7 +397,8 @@ export function stepLife(
   input: MovementInput,
   classmates: Classmate[] = [],
 ): LifeEvent[] {
-  const events: LifeEvent[] = [];
+  // Anything raised since the last step (arrival bonus, a new day while away) goes out first.
+  const events: LifeEvent[] = sim.pending.splice(0);
   const time = getSchoolTime(now);
   const profile = sim.profile;
 
@@ -387,7 +438,7 @@ export function stepLife(
     const dy = input.dy / Math.max(1, len);
     const tired = day.needs.energy < LOW_NEED ? 0.7 : 1;
     const step = LIFE_SPEED * tired * seconds;
-    const r = moveWithCollision(sim.x, sim.y, dx * step, dy * step, BODY_HALF, lifeGeometry);
+    const r = moveWithCollision(sim.x, sim.y, dx * step, dy * step, BODY_HALF, worlds[sim.world].geometry);
     sim.x = r.x;
     sim.y = r.y;
     if (Math.abs(dx) >= Math.abs(dy)) sim.facing = dx > 0 ? "right" : "left";
@@ -398,7 +449,7 @@ export function stepLife(
   const a = sim.activity;
   if (a) {
     const def = getActivity(a.key);
-    if (!def || !periodAllows(def, time.period) || (time.period.kind === "home" && !def.periods?.includes("home"))) {
+    if (!def || !periodAllows(def, time.period) || schoolClosed(sim.world, def, time.period)) {
       const cancelled = cancelActivity(sim, def?.closedMessage ?? "Time's up.", now);
       if (cancelled) events.push(cancelled);
     } else {
@@ -407,6 +458,10 @@ export function stepLife(
         sim.activity = null;
         const summary = applyActivity(sim, def, classmates.length, now);
         events.push({ kind: "activity_done", key: def.key, summary });
+        if (def.travelTo) {
+          travel(sim, def.travelTo);
+          events.push({ kind: "travelled", world: def.travelTo });
+        }
       }
     }
   }
@@ -512,6 +567,10 @@ export function finishGame(sim: LifeSim, vsClassmate: boolean, result: GameResul
   if (vsClassmate) day.needs.social = clamp(day.needs.social + 8);
   const xp = result === "win" ? (vsClassmate ? 10 : 5) : 2;
   sim.profile.xp += xp;
+  if (result === "win") {
+    const stats = (sim.profile.stats ??= { sportsWins: 0, gamesWins: 0 });
+    stats.gamesWins += 1;
+  }
   bump(sim, "games");
   if (vsClassmate) bump(sim, "friendActs");
   return { summary: `+15 fun${vsClassmate ? " · +8 friends" : ""} · +${xp} XP`, events: checkGoals(sim) };
@@ -528,14 +587,24 @@ export function sportBlocker(sim: LifeSim): string | null {
 }
 
 /** Rewards for finishing a sports match. */
-export function finishSport(sim: LifeSim, kind: SportKind, vsClassmate: boolean, result: GameResult): { summary: string; events: LifeEvent[] } {
+export function finishSport(
+  sim: LifeSim,
+  kind: SportKind,
+  vsClassmate: boolean,
+  result: GameResult,
+  now = Date.now(),
+): { summary: string; events: LifeEvent[] } {
   const day = sim.profile.day;
   const { fun, energy, social } = sports[kind].effects;
   day.needs.fun = clamp(day.needs.fun + fun);
   day.needs.energy = clamp(day.needs.energy + energy);
   day.needs.social = clamp(day.needs.social + social + (vsClassmate ? 6 : 0));
-  const xp = result === "win" ? (vsClassmate ? 12 : 8) : 3;
+  const xp = (result === "win" ? (vsClassmate ? 12 : 8) : 3) * (eventFor(now)?.sportsXp ?? 1);
   sim.profile.xp += xp;
+  if (result === "win") {
+    const stats = (sim.profile.stats ??= { sportsWins: 0, gamesWins: 0 });
+    stats.sportsWins += 1;
+  }
   bump(sim, "sports");
   if (kind === "football") bump(sim, "football");
   if (vsClassmate) bump(sim, "friendActs");
