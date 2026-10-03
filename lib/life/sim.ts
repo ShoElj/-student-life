@@ -61,7 +61,8 @@ export type LifeEvent =
   | { kind: "money_in"; label: string; amount: number }
   | { kind: "new_day"; dayIndex: number }
   | { kind: "travelled"; world: WorldKey }
-  | { kind: "streak"; count: number; reward: number };
+  | { kind: "streak"; count: number; reward: number }
+  | { kind: "caught"; key: string; text: string; detentionSec: number };
 
 export type LifeSim = {
   studentId: string;
@@ -77,6 +78,10 @@ export type LifeSim = {
   world: WorldKey;
   /** Events raised outside a step (e.g. the daily streak on arrival), sent with the next step. */
   pending: LifeEvent[];
+  /** In detention until this time (ms): can't move or do anything. */
+  detainedUntil: number;
+  /** Dice for getting caught breaking rules (replaceable in tests). */
+  random: () => number;
 };
 
 const clamp = (v: number, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, v));
@@ -97,6 +102,8 @@ function emptyCounters(): Counters {
     saved: 0,
     games: 0,
     sports: 0,
+    mischief: 0,
+    caught: 0,
   };
 }
 
@@ -165,7 +172,10 @@ function closeDay(profile: LifeProfile, now: number): ReportCard {
   const day = profile.day;
   day.reportShown = true;
   const grade = gradeLetter(day.gradePoints);
-  const bonus = day.gradePoints > 0 ? (GRADE_BONUS[grade] ?? 0) : 0;
+  const caught = day.counters.caught ?? 0;
+  const conduct = conductGrade(caught);
+  // Parents don't reward a good grade if the school says you've been misbehaving.
+  const bonus = day.gradePoints > 0 && caught < 3 ? (GRADE_BONUS[grade] ?? 0) : 0;
   if (bonus > 0) earn(profile, bonus, `Reward from home for grade ${grade}`, now);
   return {
     dayIndex: day.dayIndex,
@@ -177,7 +187,37 @@ function closeDay(profile: LifeProfile, now: number): ReportCard {
     goalsDone: day.goals.filter((g) => g.done).length,
     goalsTotal: day.goals.length,
     mood: mood(day.needs),
+    conduct,
+    caught,
   };
+}
+
+/** Behaviour on the report card, from how many times a prefect caught you today. */
+export function conductGrade(caught: number): string {
+  return caught === 0 ? "Excellent" : caught === 1 ? "Good" : caught === 2 ? "Fair" : "Poor";
+}
+
+/** Where detention is served: the front of Classroom A. */
+const DETENTION_SPOT = { x: 210, y: 760 };
+
+/** A prefect caught the student breaking a rule: fines, lost grades and maybe detention. */
+function getCaught(sim: LifeSim, def: ActivityDef, now: number): LifeEvent {
+  const risk = def.risk!;
+  const day = sim.profile.day;
+  if (risk.fine) {
+    const fine = Math.min(risk.fine, sim.profile.coins);
+    if (fine > 0) spend(sim.profile, fine, `Fine: ${def.label.toLowerCase()}`, now);
+  }
+  if (risk.grades) day.gradePoints = clamp(day.gradePoints + risk.grades);
+  if (risk.fun) day.needs.fun = clamp(day.needs.fun + risk.fun);
+  bump(sim, "caught");
+  const detentionSec = risk.detentionSec ?? 0;
+  if (detentionSec > 0 && sim.world === "school") {
+    sim.detainedUntil = now + detentionSec * 1000;
+    Object.assign(sim, DETENTION_SPOT);
+    sim.facing = "down";
+  }
+  return { kind: "caught", key: def.key, text: risk.caughtText, detentionSec };
 }
 
 /** Somewhere just inside the gate, spread out so names don't pile up. */
@@ -205,6 +245,8 @@ export function createSim(studentId: string, profile: LifeProfile, now = Date.no
     studentId,
     world,
     pending: [],
+    detainedUntil: 0,
+    random: Math.random,
     ...arrivalPoint(world),
     facing: "down",
     profile,
@@ -357,6 +399,7 @@ export type StartResult = { ok: true } | { ok: false; reason: string };
 /** Why an activity can't start right now, or null if it can. */
 export function activityBlocker(sim: LifeSim, def: ActivityDef, now = Date.now()): string | null {
   const period = getSchoolTime(now).period;
+  if (sim.detainedUntil > now) return `You're in detention for ${Math.ceil((sim.detainedUntil - now) / 1000)}s more.`;
   if (schoolClosed(sim.world, def, period)) return "School is over for today. Catch the bus to town at the Front Yard!";
   if (!periodAllows(def, period)) return def.closedMessage ?? "Not available right now.";
   const price = priceOf(def, now);
@@ -429,8 +472,8 @@ export function stepLife(
     }
   }
 
-  // Moving stops whatever you were doing.
-  const len = Math.hypot(input.dx, input.dy);
+  // Moving stops whatever you were doing (no moving at all in detention).
+  const len = sim.detainedUntil > now ? 0 : Math.hypot(input.dx, input.dy);
   if (len > 0.05) {
     const cancelled = cancelActivity(sim, "You walked away.", now);
     if (cancelled) events.push(cancelled);
@@ -456,8 +499,12 @@ export function stepLife(
       a.elapsedMs += dtMs;
       if (a.elapsedMs >= a.durationMs) {
         sim.activity = null;
-        const summary = applyActivity(sim, def, classmates.length, now);
-        events.push({ kind: "activity_done", key: def.key, summary });
+        if (def.risk && sim.random() < def.risk.chance) {
+          events.push(getCaught(sim, def, now));
+        } else {
+          const summary = applyActivity(sim, def, classmates.length, now);
+          events.push({ kind: "activity_done", key: def.key, summary: def.risk ? `😎 Got away with it! ${summary}` : summary });
+        }
         if (def.travelTo) {
           travel(sim, def.travelTo);
           events.push({ kind: "travelled", world: def.travelTo });

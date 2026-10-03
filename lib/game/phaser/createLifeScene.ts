@@ -208,7 +208,7 @@ export function createLifeScene(Phaser: PhaserModule, getClient: () => LifeClien
         const bg = this.add.graphics();
         bg.fillStyle(0x0f172a, 0.18).fillEllipse(0, 22, 22, 7);
         bg.fillStyle(0xffffff, 0.96).fillRoundedRect(-15, -15, 30, 30, 10);
-        bg.lineStyle(2.5, def.job ? 0x16a34a : def.opens ? 0x7c3aed : NAVY, 0.8).strokeRoundedRect(-15, -15, 30, 30, 10);
+        bg.lineStyle(2.5, def.risk ? 0xdc2626 : def.job ? 0x16a34a : def.opens ? 0x7c3aed : NAVY, 0.8).strokeRoundedRect(-15, -15, 30, 30, 10);
         sign.add([bg, this.add.text(0, 0, def.emoji, { fontSize: "17px" }).setOrigin(0.5)]);
         this.tweens.add({ targets: sign, y: spot.y - 39, duration: 900 + (spot.x % 300), yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
       }

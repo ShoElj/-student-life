@@ -30,13 +30,16 @@ export type LifeHud = {
   secondsLeftInPeriod: number;
   goals: { id: string; text: string; value: number; target: number; done: boolean; reward: number }[];
   activity: { key: string; label: string; emoji: string; progress: number } | null;
-  nearSpot: { id: string; label: string; emoji: string; durationSec: number; cost: number; pay: number; opens: SheetRequest | null; blocker: string | null } | null;
+  nearSpot: { id: string; label: string; emoji: string; durationSec: number; cost: number; pay: number; opens: SheetRequest | null; risky: boolean; blocker: string | null } | null;
   nearClassmate: { id: string; name: string } | null;
   onlineCount: number;
   world: WorldKey;
   event: WeeklyEvent | null;
   streak: Streak | null;
   home: Home | null;
+  /** Seconds of detention left (0 when free). */
+  detentionLeft: number;
+  caughtToday: number;
 };
 
 export type RosterStats = { level: number; savings: number; sportsWins: number; roomValue: number };

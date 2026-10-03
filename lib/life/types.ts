@@ -21,7 +21,9 @@ export type CounterKey =
   | "shifts"
   | "saved"
   | "games"
-  | "sports";
+  | "sports"
+  | "mischief"
+  | "caught";
 
 export type Counters = Record<CounterKey, number>;
 
@@ -93,6 +95,9 @@ export type ReportCard = {
   goalsDone: number;
   goalsTotal: number;
   mood: number;
+  /** Behaviour grade from how often a prefect caught you breaking rules. */
+  conduct: string;
+  caught: number;
 };
 
 export type SocialKind = "hi" | "help" | "share";

@@ -455,6 +455,13 @@ export class LifeClient {
         case "streak":
           store.patch({ streakCard: { count: e.count, reward: e.reward } });
           break;
+        case "caught":
+          playSound("caught");
+          vibrate([80, 40, 80]);
+          store.toast(e.text, "bad");
+          if (e.detentionSec > 0) this.stopWalking();
+          void this.save(true);
+          break;
         default:
           break;
       }
@@ -546,6 +553,7 @@ export class LifeClient {
                 cost: priceOf(spotDef, now),
                 pay: payFor(spotDef, sim, this.classmates.size, now),
                 opens: spotDef.opens ?? null,
+                risky: Boolean(spotDef.risk),
                 blocker: activityBlocker(sim, spotDef, now),
               }
             : null,
@@ -555,6 +563,8 @@ export class LifeClient {
         event: eventFor(now),
         streak: sim.profile.streak ?? null,
         home: sim.profile.home ?? null,
+        detentionLeft: Math.max(0, Math.ceil((sim.detainedUntil - now) / 1000)),
+        caughtToday: day.counters.caught ?? 0,
       },
       roster,
     });

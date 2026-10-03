@@ -79,6 +79,11 @@ goes in or out of savings at the School Bank.
   the Basketball Court, 🏃 **100 m sprint** on the Front Yard track, 🏓 **table tennis** in the
   Common Room and 👣 **ten-ten** in the Front Yard. Matches cost energy, give fun and XP, count
   towards daily goals and build friendships.
+- **Breaking the rules:** a few kinds of mischief, marked with red signs — play on your phone or
+  eat snacks in class, copy someone's homework in the library, or skip class behind the farm shed.
+  They're fun and quick, but a prefect might catch you (30–40% chance): fines, lost grades or 20
+  seconds of detention in Classroom A. The report card shows a conduct grade, and three catches in
+  a day means no reward from home.
 - **Names:** any name up to 20 characters — accents, emoji and other scripts are all fine.
 - **Friendships:** greetings, helping with homework in the library, sharing snacks, playing
   football and table games together build friendship levels.

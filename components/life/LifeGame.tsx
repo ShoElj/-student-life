@@ -191,7 +191,7 @@ function Actions({ hud, onTalk, touch }: { hud: LifeHud; onTalk: (id: string) =>
           <span className="text-xs font-bold opacity-80">
             {spot.blocker ??
               (spot.opens === "games" ? "Tic-tac-toe & Ayọ" : spot.opens === "sports" ? "Play a match" : spot.opens === "shop" ? "Buy new clothes" : spot.opens === "bank" ? "Save or take out money" : spot.opens === "home" ? "Decorate, pet & visit friends" : spot.opens === "furniture" ? "Buy furniture for your room" : null) ??
-            `${spot.durationSec}s${spot.cost ? ` · ${formatMoney(spot.cost)}` : ""}${spot.pay ? ` · earn ${formatMoney(spot.pay)}` : ""}`}
+            `${spot.durationSec}s${spot.cost ? ` · ${formatMoney(spot.cost)}` : ""}${spot.pay ? ` · earn ${formatMoney(spot.pay)}` : ""}${spot.risky ? " · ⚠️ might get caught" : ""}`}
           </span>
         </button>
       )}
@@ -418,7 +418,8 @@ function MenuSheet({ onClose, onOpen }: { onClose: () => void; onOpen: (sheet: S
         <p className="mb-1 font-bold text-ink">How to play</p>
         Walk to a sign to do an activity. Keep your ⚡🍛😄🤝 bars up and attend lessons for good grades. You get
         pocket money every morning; earn more from part-time jobs, goals and good report cards, and save some to
-        earn interest. Catch the 🚌 bus at the Front Yard to go to town: your home and pet, the market, the bukka,
+        earn interest. Feeling naughty? Phones and snacks in class, copying homework or skipping class are fun —
+        but a prefect might catch you (fines, lost grades or detention). Catch the 🚌 bus at the Front Yard to go to town: your home and pet, the market, the bukka,
         the football park and more. A school day lasts 10 minutes; come back every day for streak rewards.
       </div>
       <button
@@ -469,6 +470,14 @@ function ReportCardModal() {
           <div className="rounded-2xl bg-ink/5 p-3">
             <p className="text-xs font-bold text-ink/60">Mood</p>
             <p className="text-2xl font-black text-ink">{report.mood}%</p>
+          </div>
+          <div className={cn("col-span-2 rounded-2xl p-3", report.caught >= 2 ? "bg-danger/10" : "bg-leaf/10")}>
+            <p className="text-xs font-bold text-ink/60">Conduct</p>
+            <p className={cn("text-xl font-black", report.caught >= 2 ? "text-danger" : "text-leaf-dark")}>
+              {report.conduct}
+              {report.caught > 0 && <span className="text-sm font-bold"> · caught {report.caught}×</span>}
+            </p>
+            {report.caught >= 3 && <p className="text-xs font-bold text-danger">No reward from home today — the school sent a note about your behaviour.</p>}
           </div>
         </div>
         {report.bonus > 0 && (
@@ -577,6 +586,15 @@ export function LifeGame() {
         <BottomSheet title="Sports" onClose={close}>
           <SportsSheet />
         </BottomSheet>
+      )}
+      {hud && hud.detentionLeft > 0 && (
+        <div
+          role="status"
+          className="animate-pop absolute top-[calc(max(0.5rem,env(safe-area-inset-top))+13rem)] left-1/2 z-30 -translate-x-1/2 rounded-2xl border-[3px] border-white bg-danger px-4 py-2 text-center text-white shadow-lg"
+        >
+          <p className="text-base font-black">🚨 Detention</p>
+          <p className="text-sm font-bold">Sit tight for {hud.detentionLeft}s…</p>
+        </div>
       )}
       {walkingTo && (
         <button

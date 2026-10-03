@@ -255,6 +255,11 @@ export const lifeSpots: Spot[] = [
   { id: "lesson", activity: "attend_lesson", x: 210, y: 840, radius: 150, label: "Classroom A" },
   { id: "sweep_job", activity: "sweep_job", x: 330, y: 720, radius: 45, label: "Broom cupboard" },
   { id: "lessonB", activity: "attend_lesson", x: 610, y: 840, radius: 150, label: "Classroom B" },
+  // Breaking the rules.
+  { id: "phone_in_class", activity: "phone_in_class", x: 735, y: 750, radius: 40, label: "Back row seat" },
+  { id: "eat_in_class", activity: "eat_in_class", x: 100, y: 955, radius: 40, label: "Back of the class" },
+  { id: "copy_homework", activity: "copy_homework", x: 1890, y: 950, radius: 40, label: "Quiet corner" },
+  { id: "skip_class", activity: "skip_class", x: 300, y: 160, radius: 45, label: "Behind the shed" },
   // Science and computer labs.
   { id: "experiment", activity: "do_experiment", x: 1000, y: 880, radius: 90, label: "Lab benches" },
   { id: "coding", activity: "practise_coding", x: 1286, y: 850, radius: 60, label: "Computers" },

@@ -38,6 +38,19 @@ export type ActivityDef = {
   travelTo?: WorldKey;
   /** Weekly events can make tagged activities cheaper or free. */
   tag?: "market" | "bukka" | "viewing";
+  /** Breaking a school rule: a chance of being caught by a prefect, and what it costs. */
+  risk?: Risk;
+};
+
+export type Risk = {
+  /** 0–1. */
+  chance: number;
+  caughtText: string;
+  fine?: number;
+  grades?: number;
+  fun?: number;
+  /** Seconds stuck in detention. */
+  detentionSec?: number;
 };
 
 export const activities: Record<string, ActivityDef> = {
@@ -249,6 +262,59 @@ export const activities: Record<string, ActivityDef> = {
     closedMessage: "Ten-ten is for before assembly, break time and after school.",
     opens: "sports",
     sport: "tenten",
+  },
+  // ---- Breaking the rules (you might get caught) -------------------------
+  phone_in_class: {
+    key: "phone_in_class",
+    label: "Play on your phone in class",
+    emoji: "📱",
+    verb: "sneakily gaming",
+    durationSec: 8,
+    cost: 0,
+    effects: { fun: 18 },
+    periods: ["lesson"],
+    closedMessage: "Only works when there's a lesson to be bored in!",
+    counter: "mischief",
+    risk: { chance: 0.35, caughtText: "📱 A prefect took your phone! Fine ₦300 to get it back.", fine: 300, grades: -5 },
+  },
+  eat_in_class: {
+    key: "eat_in_class",
+    label: "Eat snacks in class",
+    emoji: "🤫",
+    verb: "munching quietly",
+    durationSec: 6,
+    cost: 0,
+    effects: { hunger: 18, fun: 4 },
+    periods: ["lesson"],
+    closedMessage: "Eating in class only counts during a lesson.",
+    counter: "mischief",
+    risk: { chance: 0.3, caughtText: "🍪 Caught eating in class — ₦200 fine.", fine: 200 },
+  },
+  copy_homework: {
+    key: "copy_homework",
+    label: "Copy someone's homework",
+    emoji: "📝",
+    verb: "copying homework",
+    durationSec: 5,
+    cost: 0,
+    effects: { grades: 16, xp: 2 },
+    periods: ["assembly", "lesson", "break", "after"],
+    closedMessage: "The library is closed.",
+    counter: "mischief",
+    risk: { chance: 0.4, caughtText: "📝 Caught copying! Your work gets a zero.", grades: -20, fun: -10 },
+  },
+  skip_class: {
+    key: "skip_class",
+    label: "Skip class behind the shed",
+    emoji: "🙈",
+    verb: "hiding from class",
+    durationSec: 15,
+    cost: 0,
+    effects: { fun: 20, energy: 12 },
+    periods: ["lesson"],
+    closedMessage: "There's no class to skip right now.",
+    counter: "mischief",
+    risk: { chance: 0.3, caughtText: "🙈 A prefect found you skipping class — detention!", detentionSec: 20, grades: -10 },
   },
   // The rest of the school.
   water_crops: {
