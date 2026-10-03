@@ -16,7 +16,8 @@ export type CounterKey =
   | "rest"
   | "friendActs"
   | "shifts"
-  | "saved";
+  | "saved"
+  | "games";
 
 export type Counters = Record<CounterKey, number>;
 

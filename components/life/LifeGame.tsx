@@ -14,11 +14,13 @@ import { level } from "@/lib/life/sim";
 import type { NeedKey } from "@/lib/life/types";
 import { cn } from "@/lib/utils";
 import { useLifeStore, type LifeHud } from "@/store/lifeStore";
+import { ChatSheet, useUnread } from "./ChatSheet";
+import { GameInviteCard, GamesSheet } from "./GamesSheet";
 import { LookAvatar } from "./LookPreview";
 import { WalletSheet } from "./WalletSheet";
 import { WardrobeSheet } from "./WardrobeSheet";
 
-type Sheet = { kind: "goals" } | { kind: "wallet" } | { kind: "wardrobe" } | { kind: "people" } | { kind: "menu" } | { kind: "talk"; id: string } | null;
+type Sheet = { kind: "goals" } | { kind: "wallet" } | { kind: "chat"; thread?: string } | { kind: "games" } | { kind: "wardrobe" } | { kind: "people" } | { kind: "menu" } | { kind: "talk"; id: string } | null;
 
 const NEEDS: { key: NeedKey; emoji: string; label: string }[] = [
   { key: "energy", emoji: "⚡", label: "Energy" },
@@ -60,6 +62,7 @@ function NeedBar({ value, emoji, label }: { value: number; emoji: string; label:
 
 function Hud({ hud, onOpen }: { hud: LifeHud; onOpen: (sheet: Sheet) => void }) {
   const goalsDone = hud.goals.filter((g) => g.done).length;
+  const unread = useUnread().total;
   return (
     <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-col gap-1.5 px-[max(0.5rem,env(safe-area-inset-left))] pt-[max(0.5rem,env(safe-area-inset-top))]">
       <div className="flex items-center gap-1.5">
@@ -94,8 +97,21 @@ function Hud({ hud, onOpen }: { hud: LifeHud; onOpen: (sheet: Sheet) => void }) 
         <button type="button" onClick={() => onOpen({ kind: "goals" })} className={cn(pill, "h-10 bg-sun text-sm text-ink")}>
           🎯 Goals {goalsDone}/{hud.goals.length}
         </button>
-        <button type="button" onClick={() => onOpen({ kind: "wardrobe" })} className={cn(pill, "h-10 bg-white text-sm text-brand")}>
-          👕 Wardrobe
+        <button
+          type="button"
+          onClick={() => onOpen({ kind: "chat" })}
+          className={cn(pill, "relative h-10 bg-white text-sm text-brand")}
+          aria-label={unread ? `Chat, ${unread} unread` : "Chat"}
+        >
+          💬 Chat
+          {unread > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 grid h-6 min-w-6 place-items-center rounded-full bg-danger px-1.5 text-xs font-black text-white">
+              {unread > 99 ? "99+" : unread}
+            </span>
+          )}
+        </button>
+        <button type="button" onClick={() => onOpen({ kind: "wardrobe" })} className={cn(pill, "h-10 bg-white text-sm text-brand")} aria-label="Wardrobe">
+          👕<span className="hidden sm:inline"> Wardrobe</span>
         </button>
         <button type="button" onClick={() => onOpen({ kind: "people" })} className={cn(pill, "h-10 bg-white text-sm text-brand")}>
           👥 {hud.onlineCount}
@@ -151,6 +167,7 @@ function Actions({ hud, onTalk, touch }: { hud: LifeHud; onTalk: (id: string) =>
           </span>
           <span className="text-xs font-bold opacity-80">
             {spot.blocker ??
+              (spot.opensGames ? "Tic-tac-toe & Ayọ" : null) ??
             `${spot.durationSec}s${spot.cost ? ` · ${formatMoney(spot.cost)}` : ""}${spot.pay ? ` · earn ${formatMoney(spot.pay)}` : ""}`}
           </span>
         </button>
@@ -258,7 +275,7 @@ function PeopleSheet({ onTalk }: { onTalk: (id: string) => void }) {
   );
 }
 
-function TalkSheet({ targetId, onDone }: { targetId: string; onDone: () => void }) {
+function TalkSheet({ targetId, onDone, onMessage }: { targetId: string; onDone: () => void; onMessage: () => void }) {
   const entry = useLifeStore((s) => s.roster.find((r) => r.id === targetId));
   const coins = useLifeStore((s) => s.hud?.coins ?? 0);
   const [busy, setBusy] = useState(false);
@@ -285,6 +302,13 @@ function TalkSheet({ targetId, onDone }: { targetId: string; onDone: () => void 
           </p>
         </div>
       </div>
+      <button
+        type="button"
+        onClick={onMessage}
+        className="min-h-12 rounded-2xl bg-brand px-3 text-base font-bold text-white active:scale-95"
+      >
+        💬 Write a message to {entry.name}
+      </button>
       <p className="text-sm font-bold text-ink/60">Say something</p>
       <div className="grid grid-cols-2 gap-2">
         {GREETINGS.map((g) => (
@@ -432,6 +456,15 @@ export function LifeGame() {
   const [sheet, setSheet] = useState<Sheet>(null);
   const close = useCallback(() => setSheet(null), []);
   const talk = useCallback((id: string) => setSheet({ kind: "talk", id }), []);
+  const sheetRequest = useLifeStore((s) => s.sheetRequest);
+  const game = useLifeStore((s) => s.game);
+
+  // The client asks for the games sheet when the games table is used or an invite is accepted.
+  useEffect(() => {
+    if (!sheetRequest) return;
+    useLifeStore.getState().patch({ sheetRequest: null });
+    queueMicrotask(() => setSheet({ kind: sheetRequest }));
+  }, [sheetRequest]);
 
   // Desktop shortcuts: E to do the activity here, T to talk to the nearest classmate.
   useEffect(() => {
@@ -471,6 +504,25 @@ export function LifeGame() {
           <GoalsSheet hud={hud} />
         </BottomSheet>
       )}
+      {game && sheet?.kind !== "games" && (game.status === "playing" || game.status === "waiting") && (
+        <button
+          type="button"
+          onClick={() => setSheet({ kind: "games" })}
+          className="animate-pop absolute top-[calc(max(0.5rem,env(safe-area-inset-top))+9.5rem)] left-1/2 z-20 min-h-11 -translate-x-1/2 rounded-full border-[3px] border-white bg-leaf px-4 text-sm font-black text-white shadow-lg"
+        >
+          🎲 Back to your game
+        </button>
+      )}
+      {sheet?.kind === "games" && (
+        <BottomSheet title="Games table" onClose={close}>
+          <GamesSheet />
+        </BottomSheet>
+      )}
+      {sheet?.kind === "chat" && (
+        <BottomSheet title="Messages" onClose={close}>
+          <ChatSheet initialThread={sheet.thread} />
+        </BottomSheet>
+      )}
       {sheet?.kind === "wallet" && hud && (
         <BottomSheet title="My money" onClose={close}>
           <WalletSheet hud={hud} />
@@ -488,7 +540,7 @@ export function LifeGame() {
       )}
       {sheet?.kind === "talk" && (
         <BottomSheet title="Talk" onClose={close}>
-          <TalkSheet targetId={sheet.id} onDone={close} />
+          <TalkSheet targetId={sheet.id} onDone={close} onMessage={() => setSheet({ kind: "chat", thread: sheet.id })} />
         </BottomSheet>
       )}
       {sheet?.kind === "menu" && (
@@ -496,6 +548,7 @@ export function LifeGame() {
           <MenuSheet onClose={close} />
         </BottomSheet>
       )}
+      <GameInviteCard />
       <ReportCardModal />
     </div>
   );

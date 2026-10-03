@@ -28,6 +28,8 @@ export type ActivityDef = {
   closedMessage?: string;
   counter?: CounterKey;
   job?: JobDef;
+  /** Opens the table games instead of running a timed activity. */
+  opensGames?: boolean;
 };
 
 export const activities: Record<string, ActivityDef> = {
@@ -135,14 +137,15 @@ export const activities: Record<string, ActivityDef> = {
   },
   board_games: {
     key: "board_games",
-    label: "Play ludo",
+    label: "Play table games",
     emoji: "🎲",
-    verb: "playing ludo",
-    durationSec: 10,
+    verb: "playing a table game",
+    durationSec: 0,
     cost: 0,
-    effects: { fun: 12, social: 5 },
-    periods: ["break", "after"],
-    closedMessage: "Games are for break time and after school.",
+    effects: {},
+    periods: ["assembly", "lesson", "break", "after"],
+    closedMessage: "The Common Room is closed. See you tomorrow!",
+    opensGames: true,
   },
   // Part-time jobs: a way to earn money outside lessons. Only a few shifts a day.
   canteen_job: {

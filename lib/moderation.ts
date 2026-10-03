@@ -1,6 +1,7 @@
 /**
- * Lightweight name filter for a student audience. It is deliberately simple: a blocklist
- * checked against a normalised version of the name (leetspeak and separators removed).
+ * Name checks and a lightweight rude-word filter (a blocklist checked against a normalised
+ * version of the text, with leetspeak and separators removed). Names are not filtered; the
+ * word list is used to mask rude words in chat and to check school names.
  */
 const BLOCKED_SUBSTRINGS = [
   "fuck", "fuk", "shit", "bitch", "bastard", "cunt", "pussy", "whore", "slut", "nigg",
@@ -30,16 +31,28 @@ export function containsBlockedWord(text: string): boolean {
 }
 
 export function cleanName(raw: string): string {
-  return raw.replace(/\s+/g, " ").trim();
+  return raw.replace(/[\u0000-\u001f\u007f]/g, "").replace(/\s+/g, " ").trim();
 }
 
-/** Returns an error message, or null when the display name is acceptable. */
+/** Longest name, in characters (an emoji counts as one). Keeps names readable above heads. */
+export const MAX_NAME_LENGTH = 20;
+
+export function nameLength(name: string): number {
+  return Array.from(name).length;
+}
+
+/**
+ * Returns an error message, or null when the display name is acceptable. Any characters are
+ * allowed (accents, emoji, other scripts); only empty and over-long names are refused.
+ */
 export function validateDisplayName(raw: string): string | null {
   const name = cleanName(raw);
   if (!name) return "Please enter your name.";
-  if (name.length < 2) return "Name is too short.";
-  if (name.length > 16) return "Name must be 16 characters or fewer.";
-  if (!/^[A-Za-z0-9 ._'-]+$/.test(name)) return "Use letters, numbers and spaces only.";
-  if (containsBlockedWord(name)) return "Please choose a friendlier name.";
+  if (nameLength(name) > MAX_NAME_LENGTH) return `Names can be up to ${MAX_NAME_LENGTH} characters.`;
   return null;
+}
+
+/** Replaces rude words in a chat message with asterisks, keeping the rest of the message. */
+export function maskRudeWords(text: string): string {
+  return text.replace(/[\p{L}\p{N}@$!]+/gu, (word) => (containsBlockedWord(word) ? "*".repeat(Array.from(word).length) : word));
 }

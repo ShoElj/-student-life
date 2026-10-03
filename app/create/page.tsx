@@ -61,10 +61,10 @@ function CreateRoomForm() {
           placeholder="e.g. Amaka"
           value={hostName}
           onChange={(e) => setHostName(e.target.value)}
-          maxLength={16}
+          maxLength={40}
           autoComplete="off"
           error={nameError}
-          hint="2 to 16 characters."
+          hint="Up to 20 characters — emoji welcome."
         />
         <div className="grid gap-5 sm:grid-cols-2">
           <Select label="Match duration" value={duration} onChange={(e) => setDuration(Number(e.target.value))}>

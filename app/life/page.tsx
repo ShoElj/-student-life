@@ -37,7 +37,7 @@ function NameAndPin({
       <Input
         label="Your name"
         placeholder="e.g. Amaka"
-        maxLength={16}
+        maxLength={40}
         autoComplete="off"
         value={name}
         onChange={(e) => onName(e.target.value)}

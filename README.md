@@ -29,10 +29,19 @@ Everyone in the school lives in the same world at the same time and can see each
 - **Spending:** jollof rice ₦500, puff-puff ₦200, sharing a snack with a friend ₦200, clothes
   ₦500–₦2,500.
 - **Wardrobe:** spend money on tops, colours, hairstyles and extras; classmates see your outfit.
-- **Friendships:** preset greetings (no free chat), helping with homework in the library,
-  sharing snacks and playing football together build friendship levels.
+- **Messages:** a message box (💬 Chat) for the whole school and private one-to-one chats. Messages
+  are saved (last 150 per student) so people who were away can catch up, and appear instantly
+  for everyone online; school messages also pop up in a speech bubble over the sender. Rude
+  words are shown as `*****`, sending is limited to 8 messages per 20 seconds, and anyone can be
+  muted.
+- **Table games:** at the games table in the Common Room, play **Tic-tac-toe** or **Ayọ** (the
+  Yoruba seed-sowing game) against the computer, or invite a classmate at school to play live.
+  Games raise Fun (and Friends when played together) and count towards a daily goal.
+- **Names:** any name up to 20 characters — accents, emoji and other scripts are all fine.
+- **Friendships:** greetings, helping with homework in the library, sharing snacks, playing
+  football and table games together build friendship levels.
 
-Online, accounts and saves live in Supabase (`supabase/migrations/002_school_life.sql` and `003_student_life.sql`): PINs
+Online, accounts, saves and messages live in Supabase (`supabase/migrations/002`–`004`): PINs
 are bcrypt-hashed in the database, 5 wrong PINs lock the name for 5 minutes, and the tables are
 only reachable through functions that check a per-student session token. Positions and social
 actions use Realtime broadcast on `life:{classCode}`. In demo mode the same rules run on
@@ -63,7 +72,7 @@ npm run test       # Vitest: rules, scoring, collision, bots
 ## Online multiplayer (Supabase)
 
 1. Create a Supabase project.
-2. Run the files in `supabase/migrations/` (001, 002, 003) in order in the SQL editor.
+2. Run the files in `supabase/migrations/` (001–004) in order in the SQL editor.
 3. Copy `.env.example` to `.env.local` and fill in:
 
    ```

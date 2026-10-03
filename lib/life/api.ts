@@ -7,6 +7,7 @@ import type { Look } from "@/lib/game/art/students";
 import type { RoomMode } from "@/lib/session";
 import { getSupabase } from "@/lib/supabase/client";
 import { generateId } from "@/lib/utils";
+import { cleanName, MAX_NAME_LENGTH, nameLength } from "@/lib/moderation";
 import type { LifeProfile } from "./types";
 
 export type ClassInfo = { name: string; studentCount: number };
@@ -25,16 +26,24 @@ export type Roster = {
   friendships: Record<string, number>;
 };
 
+/** A chat message. `to` is null for a message to the whole school. */
+export type ChatMessage = { id: number; from: string; fromName: string; to: string | null; body: string; at: number };
+
+export const MAX_MESSAGE_LENGTH = 300;
+
 export class LifeApiError extends Error {}
 
 const ERROR_MESSAGES: Record<string, string> = {
   class_not_found: "We couldn't find a school with that code.",
-  invalid_name: "Names can use letters, numbers and spaces (2–16 characters).",
+  invalid_name: "Names can be 1–20 characters.",
   invalid_pin: "Your PIN must be 4 numbers.",
   wrong_pin: "That PIN doesn't match. Try again.",
   locked: "Too many wrong PINs. Wait 5 minutes and try again.",
   class_full: "This school is full.",
   signed_out: "You signed in somewhere else. Please sign in again.",
+  too_fast: "Slow down a little — wait a few seconds before sending more messages.",
+  not_found: "That classmate isn't in your school.",
+  empty: "Type a message first.",
 };
 
 function fail(code: string): never {
@@ -51,6 +60,9 @@ export interface LifeApi {
   save(token: string, profile: LifeProfile): Promise<boolean>;
   roster(token: string): Promise<Roster>;
   addFriendship(token: string, otherId: string, points: number): Promise<number | null>;
+  sendMessage(token: string, to: string | null, body: string): Promise<{ id: number; at: number }>;
+  /** Latest school messages and my private conversations, oldest first. */
+  messages(token: string): Promise<ChatMessage[]>;
 }
 
 // ---------------------------------------------------------------------------
@@ -98,6 +110,18 @@ class SupabaseLifeApi implements LifeApi {
   async addFriendship(token: string, otherId: string, points: number): Promise<number | null> {
     return this.rpc<number | null>("life_add_friendship", { p_token: token, p_other: otherId, p_points: points });
   }
+
+  async sendMessage(token: string, to: string | null, body: string): Promise<{ id: number; at: number }> {
+    const result = await this.rpc<{ id: number; at: number; error?: string }>("life_send_message", { p_token: token, p_to: to, p_body: body });
+    if (result?.error) fail(result.error);
+    return result;
+  }
+
+  async messages(token: string): Promise<ChatMessage[]> {
+    const result = await this.rpc<{ messages: ChatMessage[]; error?: string }>("life_messages_for", { p_token: token });
+    if (result?.error) fail(result.error);
+    return result.messages;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -113,7 +137,12 @@ type LocalStudent = {
   lockedUntil: number;
   profile: LifeProfile | null;
 };
-type LocalClass = { name: string; students: Record<string, LocalStudent>; friendships: Record<string, number> };
+type LocalClass = {
+  name: string;
+  students: Record<string, LocalStudent>;
+  friendships: Record<string, number>;
+  messages?: ChatMessage[];
+};
 
 const LOCAL_KEY = "sbb-life-classes";
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -178,8 +207,8 @@ class LocalLifeApi implements LifeApi {
     const data = readAll();
     const cls = data[code];
     if (!cls) fail("class_not_found");
-    const name = rawName.trim().replace(/\s+/g, " ");
-    if (name.length < 2 || name.length > 16 || !/^[A-Za-z0-9 ._'-]+$/.test(name)) fail("invalid_name");
+    const name = cleanName(rawName);
+    if (nameLength(name) < 1 || nameLength(name) > MAX_NAME_LENGTH) fail("invalid_name");
     if (!/^\d{4}$/.test(pin)) fail("invalid_pin");
     const key = nameKeyOf(name);
     const pinHash = await hashPin(code, key, pin);
@@ -243,6 +272,31 @@ class LocalLifeApi implements LifeApi {
     cls.friendships[key] = Math.min(1000, (cls.friendships[key] ?? 0) + Math.max(1, Math.min(5, points)));
     writeAll(data);
     return cls.friendships[key];
+  }
+
+  async sendMessage(token: string, to: string | null, rawBody: string): Promise<{ id: number; at: number }> {
+    const data = readAll();
+    const found = findByToken(data, token);
+    if (!found) fail("signed_out");
+    const { cls, me } = found;
+    const body = rawBody.trim().slice(0, MAX_MESSAGE_LENGTH);
+    if (!body) fail("empty");
+    if (to && (to === me.id || !Object.values(cls.students).some((s) => s.id === to))) fail("not_found");
+    const messages = cls.messages ?? [];
+    const now = Date.now();
+    if (messages.filter((m) => m.from === me.id && now - m.at < 20_000).length >= 8) fail("too_fast");
+    const id = (messages[messages.length - 1]?.id ?? 0) + 1;
+    messages.push({ id, from: me.id, fromName: me.name, to, body, at: now });
+    cls.messages = messages.slice(-200);
+    writeAll(data);
+    return { id, at: now };
+  }
+
+  async messages(token: string): Promise<ChatMessage[]> {
+    const found = findByToken(readAll(), token);
+    if (!found) fail("signed_out");
+    const { cls, me } = found;
+    return (cls.messages ?? []).filter((m) => m.to === null || m.to === me.id || m.from === me.id).slice(-150);
   }
 }
 

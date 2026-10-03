@@ -21,6 +21,7 @@ export const goalDefs: GoalDef[] = [
   { id: "gradeB", text: "Reach a B for today", counter: "gradePoints", target: 50, reward: 500 },
   { id: "work", text: "Work a part-time job", counter: "shifts", target: 1, reward: 200 },
   { id: "save", text: "Put some money in savings", counter: "saved", target: 1, reward: 200 },
+  { id: "games", text: "Play a game in the Common Room", counter: "games", target: 1, reward: 200 },
   { id: "friends", text: "Do 2 things with classmates", counter: "friendActs", target: 2, reward: 300 },
 ];
 

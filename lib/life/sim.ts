@@ -86,6 +86,7 @@ function emptyCounters(): Counters {
     friendActs: 0,
     shifts: 0,
     saved: 0,
+    games: 0,
   };
 }
 
@@ -309,6 +310,7 @@ export function startActivity(sim: LifeSim, spotId: string, now = Date.now()): S
   const spot = lifeSpots.find((s) => s.id === spotId);
   const def = getActivity(spot?.activity);
   if (!spot || !def) return { ok: false, reason: "Nothing to do here." };
+  if (def.opensGames) return { ok: false, reason: "Choose a game to play." };
   if (Math.hypot(sim.x - spot.x, sim.y - spot.y) > spot.radius) return { ok: false, reason: "Walk closer first." };
   if (sim.activity) return { ok: false, reason: "You're already busy." };
   const blocker = activityBlocker(sim, def, now);
@@ -495,4 +497,22 @@ export function moveSavings(sim: LifeSim, direction: "in" | "out", amount: numbe
   if (!result.ok) return result;
   if (direction === "in") bump(sim, "saved");
   return { ok: true, events: checkGoals(sim) };
+}
+
+// ---------------------------------------------------------------------------
+// Table games
+// ---------------------------------------------------------------------------
+
+export type GameResult = "win" | "lose" | "draw";
+
+/** Rewards for finishing a game in the Common Room. Returns a short summary and any goal events. */
+export function finishGame(sim: LifeSim, vsClassmate: boolean, result: GameResult): { summary: string; events: LifeEvent[] } {
+  const day = sim.profile.day;
+  day.needs.fun = clamp(day.needs.fun + 15);
+  if (vsClassmate) day.needs.social = clamp(day.needs.social + 8);
+  const xp = result === "win" ? (vsClassmate ? 10 : 5) : 2;
+  sim.profile.xp += xp;
+  bump(sim, "games");
+  if (vsClassmate) bump(sim, "friendActs");
+  return { summary: `+15 fun${vsClassmate ? " · +8 friends" : ""} · +${xp} XP`, events: checkGoals(sim) };
 }

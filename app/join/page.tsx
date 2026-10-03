@@ -59,12 +59,12 @@ function JoinRoomForm() {
         <Input
           label="Your name"
           placeholder="e.g. Amaka"
-          maxLength={16}
+          maxLength={40}
           autoComplete="off"
           value={name}
           onChange={(e) => setName(e.target.value)}
           error={nameError}
-          hint="2 to 16 characters. Be kind — no rude names."
+          hint="Up to 20 characters — emoji welcome."
         />
         {error && (
           <p role="alert" className="rounded-2xl bg-danger/10 px-4 py-3 font-bold text-danger">
