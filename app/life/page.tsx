@@ -185,6 +185,14 @@ function LifeLanding() {
   const [saved, setSaved] = useState<{ classCode: string; name: string } | null>(null);
 
   useEffect(() => {
+    // Load the game engine in the background while the student signs in, so the school opens fast.
+    const warm = () => void import("phaser").catch(() => undefined);
+    const w = window as Window & { requestIdleCallback?: (cb: () => void) => number };
+    if (w.requestIdleCallback) w.requestIdleCallback(warm);
+    else setTimeout(warm, 1500);
+  }, []);
+
+  useEffect(() => {
     // Read after mount so the server render matches the first client render.
     const s = savedLifeSession();
     if (s) queueMicrotask(() => setSaved(s));

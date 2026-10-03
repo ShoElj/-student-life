@@ -42,7 +42,7 @@ export type LifeHud = {
   caughtToday: number;
 };
 
-export type RosterStats = { level: number; savings: number; sportsWins: number; roomValue: number };
+export type RosterStats = { stars: number; level: number; savings: number; sportsWins: number; roomValue: number };
 
 export type RosterEntry = {
   id: string;

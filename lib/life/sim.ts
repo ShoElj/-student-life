@@ -12,6 +12,7 @@ import { getGoal, pickGoals } from "./goals";
 import { SPORT_MIN_ENERGY, sports, type SportKind } from "./sports";
 import { eventFor, visit } from "./events";
 import { newHome } from "./home";
+import { addStars, STAR_RULES } from "./stars";
 import type { Spot } from "./map";
 import { worlds, type WorldKey } from "./worlds";
 import {
@@ -556,12 +557,14 @@ export function sendSocial(sim: LifeSim, kind: SocialKind, targetId: string, now
     sim.profile.xp += SOCIAL_RULES.help.xp;
     bump(sim, "helped");
     bump(sim, "friendActs");
+    addStars(sim.profile, STAR_RULES.friendAct, now);
     return { ok: true, friendshipPoints: SOCIAL_RULES.help.friendship, events: checkGoals(sim) };
   }
   if (!spend(sim.profile, SOCIAL_RULES.share.cost, "Shared a snack", now)) {
     return { ok: false, reason: `Sharing costs ${formatMoney(SOCIAL_RULES.share.cost)}` };
   }
   bump(sim, "friendActs");
+  addStars(sim.profile, STAR_RULES.friendAct, now);
   return { ok: true, friendshipPoints: SOCIAL_RULES.share.friendship, events: checkGoals(sim) };
 }
 
@@ -608,7 +611,7 @@ export function moveSavings(sim: LifeSim, direction: "in" | "out", amount: numbe
 export type GameResult = "win" | "lose" | "draw";
 
 /** Rewards for finishing a game in the Common Room. Returns a short summary and any goal events. */
-export function finishGame(sim: LifeSim, vsClassmate: boolean, result: GameResult): { summary: string; events: LifeEvent[] } {
+export function finishGame(sim: LifeSim, vsClassmate: boolean, result: GameResult, now = Date.now()): { summary: string; events: LifeEvent[] } {
   const day = sim.profile.day;
   day.needs.fun = clamp(day.needs.fun + 15);
   if (vsClassmate) day.needs.social = clamp(day.needs.social + 8);
@@ -617,6 +620,7 @@ export function finishGame(sim: LifeSim, vsClassmate: boolean, result: GameResul
   if (result === "win") {
     const stats = (sim.profile.stats ??= { sportsWins: 0, gamesWins: 0 });
     stats.gamesWins += 1;
+    addStars(sim.profile, STAR_RULES.gameWin, now);
   }
   bump(sim, "games");
   if (vsClassmate) bump(sim, "friendActs");
@@ -651,6 +655,7 @@ export function finishSport(
   if (result === "win") {
     const stats = (sim.profile.stats ??= { sportsWins: 0, gamesWins: 0 });
     stats.sportsWins += 1;
+    addStars(sim.profile, STAR_RULES.sportWin, now);
   }
   bump(sim, "sports");
   if (kind === "football") bump(sim, "football");

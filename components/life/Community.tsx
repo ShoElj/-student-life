@@ -6,22 +6,25 @@ import { streakReward, upcomingEvents } from "@/lib/life/events";
 import { roomValue } from "@/lib/life/home";
 import { formatMoney } from "@/lib/life/money";
 import { level } from "@/lib/life/sim";
+import { starsThisWeek, STAR_RULES } from "@/lib/life/stars";
 import { cn } from "@/lib/utils";
 import { useLifeStore } from "@/store/lifeStore";
 import { LookAvatar } from "./LookPreview";
 
-type Board = "level" | "savings" | "sports" | "room";
+type Board = "stars" | "level" | "savings" | "sports" | "room";
 
 const BOARDS: { key: Board; label: string; show: (v: number) => string }[] = [
+  { key: "stars", label: "🌟 This week", show: (v) => `${v} ★` },
   { key: "level", label: "⭐ Level", show: (v) => `Level ${v}` },
   { key: "savings", label: "🏦 Savings", show: (v) => formatMoney(v) },
   { key: "sports", label: "🏅 Sports wins", show: (v) => `${v} win${v === 1 ? "" : "s"}` },
   { key: "room", label: "🏠 Best room", show: (v) => formatMoney(v) },
 ];
 
-/** Who's top of the school: level, savings, sports wins and the best room. */
+/** Who's top of the school: this week's star points, then level, savings, sports wins and the best room. */
 export function LeaderboardSheet() {
-  const [board, setBoard] = useState<Board>("level");
+  const [board, setBoard] = useState<Board>("stars")
+  const [now] = useState(() => Date.now());
   const roster = useLifeStore((s) => s.roster);
   const hud = useLifeStore((s) => s.hud);
   const me = useLifeStore((s) => s.me);
@@ -29,6 +32,7 @@ export function LeaderboardSheet() {
   if (!hud || !me) return null;
 
   const mine = {
+    stars: starsThisWeek(client?.sim.profile.stats, now),
     level: level(hud.xp),
     savings: hud.savings,
     sports: client?.sim.profile.stats?.sportsWins ?? 0,
@@ -41,14 +45,14 @@ export function LeaderboardSheet() {
       name: r.name,
       look: r.look,
       isMe: false,
-      value: r.stats ? { level: r.stats.level, savings: r.stats.savings, sports: r.stats.sportsWins, room: r.stats.roomValue }[board] : 0,
+      value: r.stats ? { stars: r.stats.stars, level: r.stats.level, savings: r.stats.savings, sports: r.stats.sportsWins, room: r.stats.roomValue }[board] : 0,
     })),
   ].sort((a, b) => b.value - a.value || a.name.localeCompare(b.name));
   const show = BOARDS.find((b) => b.key === board)!.show;
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-2 gap-1 rounded-2xl bg-ink/5 p-1 sm:grid-cols-4" role="tablist" aria-label="Leaderboards">
+      <div className="grid grid-cols-2 gap-1 rounded-2xl bg-ink/5 p-1 sm:grid-cols-5" role="tablist" aria-label="Leaderboards">
         {BOARDS.map((b) => (
           <button
             key={b.key}
@@ -56,12 +60,19 @@ export function LeaderboardSheet() {
             role="tab"
             aria-selected={board === b.key}
             onClick={() => setBoard(b.key)}
-            className={cn("min-h-10 rounded-xl text-sm font-bold", board === b.key ? "bg-white text-brand shadow" : "text-ink/60")}
+            className={cn("min-h-10 rounded-xl text-sm font-bold first:col-span-2 sm:first:col-span-1", board === b.key ? "bg-white text-brand shadow" : "text-ink/60")}
           >
             {b.label}
           </button>
         ))}
       </div>
+      {board === "stars" && (
+        <p className="rounded-2xl bg-sun/30 px-3 py-2 text-sm text-ink/80">
+          Earn stars by being a great student: lesson +{STAR_RULES.lesson}, goal +{STAR_RULES.goal}, report card A/B/C +{STAR_RULES.grade.A}/+
+          {STAR_RULES.grade.B}/+{STAR_RULES.grade.C}, sports win +{STAR_RULES.sportWin}, game win +{STAR_RULES.gameWin}, helping or sharing +
+          {STAR_RULES.friendAct}, daily visit +{STAR_RULES.streak}. Getting caught: {STAR_RULES.caught}. <b>Resets every Monday</b> — anyone can win!
+        </p>
+      )}
       <ol className="flex flex-col gap-1.5">
         {rows.map((r, i) => (
           <li key={r.id} className={cn("flex items-center gap-3 rounded-2xl p-2", r.isMe ? "bg-sun/40" : "bg-ink/5")}>

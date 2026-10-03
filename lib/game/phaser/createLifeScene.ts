@@ -89,6 +89,7 @@ export function createLifeScene(Phaser: PhaserModule, getClient: () => LifeClien
   return class LifeScene extends Phaser.Scene {
     private people = new Map<string, PersonView>();
     private mapObjects: PhaserType.GameObjects.GameObject[] = [];
+    private toBake: Graphics[] = [];
     private worldKey: WorldKey = "school";
     private zoom = 0;
     private camCenter: { x: number; y: number } | null = null;
@@ -128,6 +129,45 @@ export function createLifeScene(Phaser: PhaserModule, getClient: () => LifeClien
 
     // -- Map --------------------------------------------------------------
 
+    /**
+     * Static shapes (grass, trees, walls, floors, furniture) are drawn into one image after the
+     * map is built, instead of being re-drawn from thousands of shapes every frame.
+     */
+    private staticGraphics(depth: number): Graphics {
+      const g = this.add.graphics().setDepth(depth);
+      this.toBake.push(g);
+      return g;
+    }
+
+    private bake(width: number, height: number): void {
+      // Drawn at the closest zoom so the map stays sharp (and within phones' 4096px texture limit).
+      const scale = Math.min(MAX_ZOOM, 4096 / Math.max(width, height));
+      const rt = this.track(
+        this.add
+          .renderTexture(0, 0, Math.ceil(width * scale), Math.ceil(height * scale))
+          .setOrigin(0, 0)
+          .setScale(1 / scale)
+          .setDepth(0),
+      );
+      for (const g of [...this.toBake].sort((a, b) => a.depth - b.depth)) rt.draw(g.setScale(scale));
+      for (const g of this.toBake) g.destroy();
+      this.toBake = [];
+    }
+
+    /** The rounded sign behind an activity's emoji, drawn once per border colour and reused. */
+    private signTexture(border: number): string {
+      const key = `sign-${border.toString(16)}`;
+      if (!this.textures.exists(key)) {
+        const g = this.make.graphics({ x: 0, y: 0 }, false);
+        g.fillStyle(0x0f172a, 0.18).fillEllipse(17, 41, 22, 7);
+        g.fillStyle(0xffffff, 0.96).fillRoundedRect(2, 2, 30, 30, 10);
+        g.lineStyle(2.5, border, 0.8).strokeRoundedRect(2, 2, 30, 30, 10);
+        g.generateTexture(key, 34, 46);
+        g.destroy();
+      }
+      return key;
+    }
+
     private track<T extends PhaserType.GameObjects.GameObject>(obj: T): T {
       this.mapObjects.push(obj);
       return obj;
@@ -141,7 +181,7 @@ export function createLifeScene(Phaser: PhaserModule, getClient: () => LifeClien
       const { width: W, height: H } = world.size;
 
       // Grass with soft light and dark patches.
-      const g = this.track(this.add.graphics().setDepth(0));
+      const g = this.staticGraphics(0);
       g.fillStyle(world.ground, 1).fillRect(0, 0, W, H);
       const rand = seeded(key === "school" ? 11 : 29);
       for (let i = 0; i < (W * H) / 9000; i++) {
@@ -174,8 +214,8 @@ export function createLifeScene(Phaser: PhaserModule, getClient: () => LifeClien
 
       for (const d of world.decorations) this.drawDecoration(g, d);
 
+      const fg = this.staticGraphics(1);
       for (const o of world.furniture) {
-        const fg = this.track(this.add.graphics().setDepth(1 + (o.y + o.height) / 100000));
         // Shadow, body, lighter top face and a crisp edge.
         fg.fillStyle(0x0f172a, 0.22).fillRoundedRect(o.x + 3, o.y + 5, o.width, o.height, 6);
         fg.fillStyle(hex(o.color), 1).fillRoundedRect(o.x, o.y, o.width, o.height, 6);
@@ -194,21 +234,20 @@ export function createLifeScene(Phaser: PhaserModule, getClient: () => LifeClien
         const label = this.track(
           this.add.text(z.x + 12, z.y + 10, z.label, { fontFamily: FONT, fontSize: "15px", fontStyle: "bold", color: "#1e3a8a" }).setDepth(2.5),
         );
-        const plate = this.track(this.add.graphics().setDepth(2.4));
+        const plate = this.staticGraphics(2.4);
         plate.fillStyle(0x0f172a, 0.15).fillRoundedRect(z.x + 6, z.y + 8, label.width + 14, label.height + 6, 9);
         plate.fillStyle(0xffffff, 0.92).fillRoundedRect(z.x + 4, z.y + 5, label.width + 14, label.height + 6, 9);
         label.setPosition(z.x + 11, z.y + 8);
       }
+
+      this.bake(W, H);
 
       // Activity spots: a floating sign so students know where to go.
       for (const spot of world.spots) {
         const def = activities[spot.activity];
         if (!def) continue;
         const sign = this.track(this.add.container(spot.x, spot.y - 34).setDepth(2.6));
-        const bg = this.add.graphics();
-        bg.fillStyle(0x0f172a, 0.18).fillEllipse(0, 22, 22, 7);
-        bg.fillStyle(0xffffff, 0.96).fillRoundedRect(-15, -15, 30, 30, 10);
-        bg.lineStyle(2.5, def.risk ? 0xdc2626 : def.job ? 0x16a34a : def.opens ? 0x7c3aed : NAVY, 0.8).strokeRoundedRect(-15, -15, 30, 30, 10);
+        const bg = this.add.image(0, 6, this.signTexture(def.risk ? 0xdc2626 : def.job ? 0x16a34a : def.opens ? 0x7c3aed : NAVY));
         sign.add([bg, this.add.text(0, 0, def.emoji, { fontSize: "17px" }).setOrigin(0.5)]);
         this.tweens.add({ targets: sign, y: spot.y - 39, duration: 900 + (spot.x % 300), yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
       }
@@ -219,7 +258,7 @@ export function createLifeScene(Phaser: PhaserModule, getClient: () => LifeClien
       const { width: W, height: H } = world.size;
       const clear = (x: number, y: number, r: number) =>
         world.zones.every((z) => x + r < z.x - 12 || x - r > z.x + z.width + 12 || y + r < z.y - 12 || y - r > z.y + z.height + 12);
-      const g = this.track(this.add.graphics().setDepth(0.5));
+      const g = this.staticGraphics(0.5);
       let placed = 0;
       for (let i = 0; i < 900 && placed < (W * H) / 26000; i++) {
         const x = 20 + rand() * (W - 40);

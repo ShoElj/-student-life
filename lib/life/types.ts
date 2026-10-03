@@ -63,7 +63,7 @@ export type LifeProfile = {
   world?: WorldKey;
   home?: Home;
   streak?: Streak;
-  stats?: { sportsWins: number; gamesWins: number };
+  stats?: { sportsWins: number; gamesWins: number; /** Star points this week (see stars.ts). */ stars?: number; starsWeek?: string };
 };
 
 export type ActivityState = { key: string; spotId: string; elapsedMs: number; durationMs: number; /** What was paid, refunded if cancelled. */ paid?: number };

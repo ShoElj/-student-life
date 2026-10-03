@@ -8,7 +8,8 @@ import { inputVector, playerInput, resetInput } from "@/lib/game/input";
 import { createTransport, type RoomTransport } from "@/lib/realtime/channels";
 import type { RoomMode } from "@/lib/session";
 import { playSound, vibrate } from "@/lib/sound";
-import { useLifeStore, type GameSession, type RosterEntry, type RosterStats, type SheetRequest, type SportMatch } from "@/store/lifeStore";
+import { addStars, starsForEvent, starsThisWeek } from "./stars";
+import { useLifeStore, type LifeHud, type GameSession, type RosterEntry, type RosterStats, type SheetRequest, type SportMatch } from "@/store/lifeStore";
 import { generateId } from "@/lib/utils";
 import { activities, getActivity, jobKeys } from "./activities";
 import { getLifeApi, LifeApiError, MAX_MESSAGE_LENGTH, TRANSFER_LIMITS, type ChatMessage, type LifeApi } from "./api";
@@ -211,14 +212,25 @@ function normaliseProfile(studentId: string, raw: LifeProfile | null): LifeProfi
       raw.streak && typeof raw.streak.lastDate === "string"
         ? { count: money(raw.streak.count), lastDate: raw.streak.lastDate, best: money(raw.streak.best) }
         : undefined,
-    stats: { sportsWins: money(raw.stats?.sportsWins), gamesWins: money(raw.stats?.gamesWins) },
+    stats: {
+      sportsWins: money(raw.stats?.sportsWins),
+      gamesWins: money(raw.stats?.gamesWins),
+      stars: money(raw.stats?.stars),
+      starsWeek: typeof raw.stats?.starsWeek === "string" ? raw.stats.starsWeek.slice(0, 10) : undefined,
+    },
   };
+}
+
+/** Lessons (not mischief) earn stars on the weekly leaderboard. */
+function isLesson(key: string): boolean {
+  const def = getActivity(key);
+  return !!def && !def.risk && (def.effects.grades ?? 0) > 0;
 }
 
 function rosterStats(s: RosterStudent): RosterStats {
   const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.max(0, v) : 0);
-  const stats = (s.stats ?? {}) as { sportsWins?: unknown };
-  return { level: level(num(s.xp)), savings: num(s.savings), sportsWins: num(stats.sportsWins), roomValue: roomValue(sanitizeHome(s.home)) };
+  const stats = (s.stats ?? {}) as { sportsWins?: unknown; stars?: unknown; starsWeek?: unknown };
+  return { stars: starsThisWeek(stats, Date.now()), level: level(num(s.xp)), savings: num(s.savings), sportsWins: num(stats.sportsWins), roomValue: roomValue(sanitizeHome(s.home)) };
 }
 
 export class LifeClient {
@@ -403,6 +415,7 @@ export class LifeClient {
   private handleEvents(events: LifeEvent[]): void {
     const store = useLifeStore.getState();
     for (const e of events) {
+      addStars(this.sim.profile, starsForEvent(e, isLesson), Date.now());
       switch (e.kind) {
         case "period_changed":
           playSound("break-bell");
@@ -410,7 +423,7 @@ export class LifeClient {
           break;
         case "activity_done": {
           const def = getActivity(e.key);
-          playSound("powerup");
+          playSound("pop");
           vibrate(20);
           store.toast(`${def?.emoji ?? "✅"} Done${e.summary ? `: ${e.summary}` : "!"}`, "good");
           break;
@@ -419,12 +432,12 @@ export class LifeClient {
           store.toast(e.reason, "info");
           break;
         case "goal_done":
-          playSound("winner");
+          playSound("chime");
           vibrate([30, 40, 30]);
           store.toast(`🎯 Goal complete: ${e.text} (+${formatMoney(e.reward)})`, "good");
           break;
         case "money_in":
-          playSound("powerup");
+          playSound("coin");
           store.toast(`💵 ${e.label}: +${formatMoney(e.amount)}`, "good");
           break;
         case "need_low":
@@ -447,12 +460,13 @@ export class LifeClient {
           store.toast("☀️ A new school day has started!", "info");
           break;
         case "travelled":
-          playSound("break-bell");
+          playSound("bus");
           store.toast(e.world === "town" ? "🚌 Welcome to town! Visit your home, the market and the football park." : "🚌 Back at school!", "info");
           this.sendPresence(true);
           void this.save(true);
           break;
         case "streak":
+          playSound("chime");
           store.patch({ streakCard: { count: e.count, reward: e.reward } });
           break;
         case "caught":
@@ -498,26 +512,26 @@ export class LifeClient {
     }
     roster.sort((a, b) => Number(b.online) - Number(a.online) || b.friendship - a.friendship || a.name.localeCompare(b.name));
 
-    useLifeStore.getState().patch({
-      hud: {
-        needs: { ...day.needs },
-        mood: mood(day.needs),
-        coins: sim.profile.coins,
-        savings: sim.profile.savings,
-        moneyEarned: day.coinsEarned,
-        moneySpent: day.moneySpent,
-        shiftsLeft: shiftsLeft(day),
-        ledger: sim.profile.ledger.slice(0, 12),
-        jobs: jobKeys.map((key) => {
-          const def = activities[key];
-          return {
-            key,
-            label: def.label,
-            emoji: def.emoji,
-            where: def.job?.where ?? "",
-            pay: payFor(def, sim, this.classmates.size, now),
-            open: !def.periods || def.periods.includes(time.period.kind),
-            hours: def.closedMessage ?? "",
+    const hud: LifeHud = {
+      // Whole numbers: the bars can't show fractions, and it lets unchanged frames be skipped.
+      needs: { energy: Math.round(day.needs.energy), hunger: Math.round(day.needs.hunger), fun: Math.round(day.needs.fun), social: Math.round(day.needs.social) },
+      mood: mood(day.needs),
+      coins: sim.profile.coins,
+      savings: sim.profile.savings,
+      moneyEarned: day.coinsEarned,
+      moneySpent: day.moneySpent,
+      shiftsLeft: shiftsLeft(day),
+      ledger: sim.profile.ledger.slice(0, 12),
+      jobs: jobKeys.map((key) => {
+        const def = activities[key];
+        return {
+          key,
+          label: def.label,
+          emoji: def.emoji,
+          where: def.job?.where ?? "",
+          pay: payFor(def, sim, this.classmates.size, now),
+          open: !def.periods || def.periods.includes(time.period.kind),
+          hours: def.closedMessage ?? "",
           };
         }),
         xp: sim.profile.xp,
@@ -565,10 +579,15 @@ export class LifeClient {
         home: sim.profile.home ?? null,
         detentionLeft: Math.max(0, Math.ceil((sim.detainedUntil - now) / 1000)),
         caughtToday: day.counters.caught ?? 0,
-      },
-      roster,
-    });
+    };
+    // Only re-render the screen when something visible changed.
+    const key = JSON.stringify([hud, roster]);
+    if (key === this.lastHudKey) return;
+    this.lastHudKey = key;
+    useLifeStore.getState().patch({ hud, roster });
   }
+
+  private lastHudKey = "";
 
   // -------------------------------------------------------------------------
   // Player actions
@@ -583,14 +602,14 @@ export class LifeClient {
       const tired = def.opens === "sports" ? sportBlocker(this.sim) : null;
       if (blocker || tired) useLifeStore.getState().toast((blocker ?? tired)!, "bad");
       else {
-        playSound("button-click");
+        playSound("pop");
         useLifeStore.getState().patch({ sheetRequest: def.opens, sportVenue: def.sport ?? null });
       }
       return;
     }
     const result = startActivity(this.sim, spot.id);
     if (!result.ok) useLifeStore.getState().toast(result.reason, "bad");
-    else playSound("button-click");
+    else playSound("pop");
     this.publishHud(Date.now());
   }
 
@@ -785,7 +804,6 @@ export class LifeClient {
     const outcome = rules.outcome(state);
     if (outcome === null) {
       this.setGame({ ...game, moves });
-      playSound("button-click");
       return;
     }
     const result = outcome === "draw" ? "draw" : outcome === game.me ? "win" : "lose";
@@ -825,7 +843,7 @@ export class LifeClient {
       }
       const seed = Number.isInteger(p.seed) ? p.seed : undefined;
       store.patch({ invite: { id: p.gameId, kind: p.game, seed, fromId, fromName: name, at: Date.now() } });
-      playSound("button-click");
+      playSound("message");
       vibrate([20, 30, 20]);
       return;
     }
@@ -1072,7 +1090,7 @@ export class LifeClient {
       store.toast(result.reason, "bad");
       return false;
     }
-    playSound("powerup");
+    playSound("pop");
     if (done) store.toast(done, "good");
     this.sendPresence(true);
     void this.save(true);
@@ -1152,7 +1170,7 @@ export class LifeClient {
     }
     spend(this.sim.profile, value, `Sent to ${name}`);
     this.send("life_money", { to });
-    playSound("powerup");
+    playSound("coin");
     vibrate(20);
     store.toast(`💸 Sent ${formatMoney(value)} to ${name}`, "good");
     void this.save(true);
@@ -1173,7 +1191,7 @@ export class LifeClient {
         receive(this.sim.profile, t.amount, `From ${t.fromName}${note ? `: “${note}”` : ""}`.slice(0, 60), t.at);
         store.toast(`💸 ${t.fromName} sent you ${formatMoney(t.amount)}${note ? ` — “${note}”` : ""}`, "good");
       }
-      playSound("winner");
+      playSound("coin");
       vibrate([30, 40, 30]);
       await this.save(true);
       this.publishHud(Date.now());
@@ -1248,7 +1266,7 @@ export class LifeClient {
       this.markRead(thread);
       return;
     }
-    playSound("button-click");
+    playSound("message");
     vibrate(15);
     const text = maskRudeWords(message.body);
     store.toast(message.to === null ? `💬 ${message.fromName}: ${text}` : `💌 ${message.fromName} (to you): ${text}`, "info");
@@ -1308,7 +1326,7 @@ export class LifeClient {
       store.toast(result.reason, "bad");
       return false;
     }
-    playSound("button-click");
+    playSound("coin");
     this.handleEvents(result.events ?? []);
     store.toast(direction === "in" ? `🏦 Saved ${formatMoney(amount)}` : `💵 Took out ${formatMoney(amount)}`, "good");
     void this.save(true);
@@ -1420,7 +1438,7 @@ export class LifeClient {
       if (typeof p.friendship === "number") this.friendships[m.playerId] = p.friendship;
       this.handleEvents(receiveSocial(this.sim, p.kind));
       const store = useLifeStore.getState();
-      playSound("button-click");
+      playSound("pop");
       vibrate(15);
       if (p.kind === "hi" && p.line && GREETINGS.includes(p.line as (typeof GREETINGS)[number])) {
         this.bubbles.set(m.playerId, { text: p.line, until: Date.now() + BUBBLE_MS });
