@@ -114,7 +114,23 @@ npm run build      # production build
 npm run lint       # ESLint
 npm run typecheck  # TypeScript
 npm run test       # Vitest: rules, scoring, collision, bots
+npm run e2e        # Browser tests (run `npm run build` first)
 ```
+
+### Browser tests
+
+`npm run e2e` plays the real site in a headless browser: Breaktime Battle (multiplayer, practice,
+phone/tablet layouts) and Student Life (school, money transfers, chat and table games, every sport,
+player-vs-player, the town and Food Court, mischief). If nothing is running on port 3100 it starts
+the built site itself. Each test prints ✓/✗ checks and the run ends with a summary; screenshots go
+to `e2e/.out/` (not committed).
+
+- Run some tests only: `npm run e2e -- life-town battle` (matches file names in `e2e/specs/`).
+- First time on a new machine: `npx playwright install chromium`.
+- Settings: `E2E_BASE_URL` (another server), `CHROMIUM_PATH` (use an installed Chromium), `E2E_OUT`.
+- Without Supabase keys the game keeps schools in the browser, so each test runs its students as
+  tabs of one browser. Several game tabs at once are heavy for a small machine, so two-player
+  tests allow generous waits, and the runner retries a failed test once (the summary says so).
 
 ## Online multiplayer (Supabase)
 

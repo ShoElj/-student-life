@@ -65,6 +65,8 @@ export type LifeProfile = {
   home?: Home;
   streak?: Streak;
   stats?: { sportsWins: number; gamesWins: number; /** Star points this week (see stars.ts). */ stars?: number; starsWeek?: string };
+  /** Ids of the last money transfers collected, so the same transfer is never paid twice. */
+  claimed?: number[];
 };
 
 export type ActivityState = { key: string; spotId: string; elapsedMs: number; durationMs: number; /** What was paid, refunded if cancelled. */ paid?: number };

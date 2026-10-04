@@ -84,6 +84,8 @@ const HUD_EVERY_MS = 200;
 const BUBBLE_MS = 3_000;
 const CHAT_BUBBLE_MS = 5_000;
 const CHAT_REFRESH_MS = 30_000;
+/** How many collected transfer ids a profile remembers. */
+const MAX_CLAIMED = 50;
 const INVITE_TIMEOUT_MS = 30_000;
 const COMPUTER_THINK_MS = 650;
 
@@ -222,6 +224,7 @@ function normaliseProfile(studentId: string, raw: LifeProfile | null): LifeProfi
       stars: money(raw.stats?.stars),
       starsWeek: typeof raw.stats?.starsWeek === "string" ? raw.stats.starsWeek.slice(0, 10) : undefined,
     },
+    claimed: Array.isArray(raw.claimed) ? raw.claimed.filter((id) => Number.isInteger(id)).slice(-MAX_CLAIMED) : [],
   };
 }
 
@@ -1214,8 +1217,11 @@ export class LifeClient {
     if (this.claiming || this.disposed) return;
     this.claiming = true;
     try {
-      const transfers = await this.api.claimMoney(this.session.token);
+      // Skip any transfer already paid in (if two tabs save at once, demo storage can hand one back).
+      const already = new Set(this.sim.profile.claimed ?? []);
+      const transfers = (await this.api.claimMoney(this.session.token)).filter((t) => !already.has(t.id));
       if (transfers.length === 0) return;
+      this.sim.profile.claimed = [...already, ...transfers.map((t) => t.id)].slice(-MAX_CLAIMED);
       const store = useLifeStore.getState();
       for (const t of transfers) {
         const note = maskRudeWords(t.note ?? "");
