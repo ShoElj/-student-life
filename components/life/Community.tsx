@@ -18,7 +18,7 @@ const BOARDS: { key: Board; label: string; show: (v: number) => string }[] = [
   { key: "level", label: "⭐ Level", show: (v) => `Level ${v}` },
   { key: "savings", label: "🏦 Savings", show: (v) => formatMoney(v) },
   { key: "sports", label: "🏅 Sports wins", show: (v) => `${v} win${v === 1 ? "" : "s"}` },
-  { key: "room", label: "🏠 Best room", show: (v) => formatMoney(v) },
+  { key: "room", label: "🏠 Best home", show: (v) => formatMoney(v) },
 ];
 
 /** Who's top of the school: this week's star points, then level, savings, sports wins and the best room. */

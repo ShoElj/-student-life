@@ -6,6 +6,7 @@ import type PhaserType from "phaser";
 import { ART_SCALE, drawStudent, STUDENT_HEIGHT, type Look, type StudentFrame, type StudentView } from "../art/students";
 import type { Direction } from "../types";
 import { activities } from "@/lib/life/activities";
+import { getSchoolTime } from "@/lib/life/clock";
 import { friendLevel } from "@/lib/life/friendship";
 import type { Decoration, FloorPattern, LifeZone } from "@/lib/life/map";
 import { worlds, type WorldDef, type WorldKey } from "@/lib/life/worlds";
@@ -19,6 +20,17 @@ type Image = PhaserType.GameObjects.Image;
 type Graphics = PhaserType.GameObjects.Graphics;
 
 const NAVY = 0x1e3a8a;
+type Ambient = {
+  obj: PhaserType.GameObjects.Text;
+  vx: number;
+  min: number;
+  max: number;
+  baseY: number;
+  bob: number;
+  wrap: boolean;
+  phase: number;
+};
+
 const FONT = '"Nunito", "Trebuchet MS", "Segoe UI", system-ui, sans-serif';
 const FEET_Y = 13;
 const SCALE = 1.2;
@@ -93,6 +105,11 @@ export function createLifeScene(Phaser: PhaserModule, getClient: () => LifeClien
     private worldKey: WorldKey = "school";
     private zoom = 0;
     private camCenter: { x: number; y: number } | null = null;
+    /** Cars, townspeople and birds that move around to make the world feel alive. */
+    private ambient: Ambient[] = [];
+    /** Darkens the world a little at dawn and dusk. */
+    private shade: PhaserType.GameObjects.Rectangle | null = null;
+    private shadeCheck = 0;
     private isTouch = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
 
     constructor() {
@@ -114,6 +131,7 @@ export function createLifeScene(Phaser: PhaserModule, getClient: () => LifeClien
         this.camCenter = null;
       }
       this.syncPeople(client, delta);
+      this.syncAmbient(delta);
       this.syncCamera(client);
     }
 
@@ -226,6 +244,23 @@ export function createLifeScene(Phaser: PhaserModule, getClient: () => LifeClien
           const size = Math.max(14, Math.min(34, Math.min(o.width, o.height) * 0.7));
           this.track(this.add.text(o.x + o.width / 2, o.y + o.height / 2, o.emoji, { fontSize: `${size}px` }).setOrigin(0.5).setDepth(1.5));
         }
+        if (o.caption) {
+          this.track(
+            this.add
+              .text(o.x + o.width / 2, o.y + o.height + 2, o.caption, {
+                fontFamily: FONT,
+                fontSize: "9px",
+                fontStyle: "bold",
+                color: "#ffffff",
+                align: "center",
+                backgroundColor: `#${darken(hex(o.color), 0.25).toString(16).padStart(6, "0")}`,
+                padding: { x: 3, y: 1 },
+                lineSpacing: -2,
+              })
+              .setOrigin(0.5, 0)
+              .setDepth(1.6),
+          );
+        }
       }
 
       // Room name plates.
@@ -241,6 +276,7 @@ export function createLifeScene(Phaser: PhaserModule, getClient: () => LifeClien
       }
 
       this.bake(W, H);
+      this.addLife(world);
 
       // Activity spots: a floating sign so students know where to go.
       for (const spot of world.spots) {
@@ -250,6 +286,77 @@ export function createLifeScene(Phaser: PhaserModule, getClient: () => LifeClien
         const bg = this.add.image(0, 6, this.signTexture(def.risk ? 0xdc2626 : def.job ? 0x16a34a : def.opens ? 0x7c3aed : NAVY));
         sign.add([bg, this.add.text(0, 0, def.emoji, { fontSize: "17px" }).setOrigin(0.5)]);
         this.tweens.add({ targets: sign, y: spot.y - 39, duration: 900 + (spot.x % 300), yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
+      }
+    }
+
+    /** Traffic on the town's Main Road, people going about their day and birds overhead. */
+    private addLife(world: WorldDef): void {
+      this.ambient = [];
+      const rand = seeded(world.key === "school" ? 5 : 7);
+      const add = (emoji: string, x: number, y: number, size: number, vx: number, min: number, max: number, wrap: boolean, bob = 0, depth?: number) => {
+        const obj = this.track(this.add.text(x, y, emoji, { fontSize: `${size}px` }).setOrigin(0.5, 0.8));
+        // Emoji vehicles and walkers face left; flip the ones heading right.
+        obj.setFlipX(vx > 0).setDepth(depth ?? 3 + y / 10000);
+        this.ambient.push({ obj, vx, min, max, baseY: y, bob, wrap, phase: rand() * Math.PI * 2 });
+      };
+      const { width: W, height: H } = world.size;
+      if (world.key === "town") {
+        const road = world.zones.find((z) => z.key === "road");
+        if (road) {
+          const vehicles = ["🚐", "🛵", "🚗", "🚕", "🛺", "🚌", "🛵", "🚙"];
+          const end = road.x + road.width;
+          vehicles.forEach((v, i) => {
+            const east = i % 2 === 0;
+            const speed = (v === "🛵" ? 150 : v === "🚌" ? 85 : 110) + rand() * 30;
+            const y = east ? road.y + road.height * 0.32 : road.y + road.height * 0.8;
+            add(v, road.x + (i / vehicles.length) * road.width + rand() * 120, y, v === "🚌" ? 40 : 32, east ? speed : -speed, road.x - 60, end + 40, true);
+          });
+        }
+        // Walkers on the pavement in front of the shops.
+        ["🚶🏾‍♀️", "🚶🏾", "🧑🏾‍🦯", "🚶🏿‍♀️", "🏃🏾"].forEach((p, i) => {
+          const speed = (p === "🏃🏾" ? 60 : 26) + rand() * 12;
+          add(p, 120 + rand() * 2100, 588, 24, (i % 2 ? -1 : 1) * speed, 70, 2340, false, 1.5);
+        });
+        // Market sellers, the cook at the Food Court, pigeons in the square.
+        add("👩🏾‍🦱", 150, 1320, 22, 0, 0, 0, false, 1.2);
+        add("👨🏾", 310, 1320, 22, 0, 0, 0, false, 1.2);
+        add("👳🏾‍♂️", 625, 976, 22, 0, 0, 0, false, 1.2);
+        add("👩🏾‍🍳", 900, 1394, 20, 0, 0, 0, false, 1);
+        add("🕊️", 2050, 1060, 18, 14, 1980, 2300, false, 2);
+        add("🕊️", 2240, 1090, 18, -18, 1980, 2300, false, 2);
+      } else {
+        add("🐓", 300, 420, 20, 16, 100, 520, false, 1.5);
+      }
+      // Birds flying high over everything.
+      for (let i = 0; i < 2; i++) add("🐦", rand() * W, 80 + rand() * (H - 160), 18, (i ? -1 : 1) * (70 + rand() * 30), -60, W + 60, true, 6, 30);
+
+      this.shade = this.track(this.add.rectangle(0, 0, W, H, 0x1e1b4b, 0).setOrigin(0, 0).setDepth(40));
+      this.shadeCheck = 0;
+    }
+
+    private syncAmbient(delta: number): void {
+      const dt = Math.min(delta, 100) / 1000;
+      const t = performance.now() / 1000;
+      for (const a of this.ambient) {
+        if (a.vx) {
+          a.obj.x += a.vx * dt;
+          if (a.wrap) {
+            if (a.vx > 0 && a.obj.x > a.max) a.obj.x = a.min;
+            if (a.vx < 0 && a.obj.x < a.min) a.obj.x = a.max;
+          } else if (a.obj.x > a.max || a.obj.x < a.min) {
+            a.vx = -a.vx;
+            a.obj.x = Math.min(a.max, Math.max(a.min, a.obj.x));
+            a.obj.setFlipX(a.vx > 0);
+          }
+        }
+        if (a.bob) a.obj.y = a.baseY + Math.sin(t * 6 + a.phase) * a.bob;
+      }
+      // Dawn and dusk: checked once a second (the day is 10 minutes long).
+      if (this.shade && (this.shadeCheck -= delta) <= 0) {
+        this.shadeCheck = 1000;
+        const sec = getSchoolTime().secondsIntoDay;
+        const alpha = sec < 40 ? 0.14 * (1 - sec / 40) : sec > 470 ? Math.min(0.24, ((sec - 470) / 130) * 0.24) : 0;
+        this.shade.setFillStyle(0x1e1b4b, alpha);
       }
     }
 

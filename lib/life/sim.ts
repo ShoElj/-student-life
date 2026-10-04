@@ -11,7 +11,7 @@ import { SOCIAL_RULES } from "./friendship";
 import { getGoal, pickGoals } from "./goals";
 import { SPORT_MIN_ENERGY, sports, type SportKind } from "./sports";
 import { eventFor, visit } from "./events";
-import { newHome } from "./home";
+import { getHouse, newHome, studyBonus } from "./home";
 import { addStars, STAR_RULES } from "./stars";
 import type { Spot } from "./map";
 import { worlds, type WorldKey } from "./worlds";
@@ -91,6 +91,7 @@ function emptyCounters(): Counters {
   return {
     lessons: 0,
     study: 0,
+    homeStudy: 0,
     meals: 0,
     snacks: 0,
     football: 0,
@@ -344,10 +345,12 @@ export function goalProgress(day: DayState, goalId: string): { value: number; ta
 function applyActivity(sim: LifeSim, def: ActivityDef, classmatesAtSchool: number, now: number): string {
   const day = sim.profile.day;
   // Happy students learn and grow faster.
-  const boost = 0.6 + (0.4 * mood(day.needs)) / 100;
+  // Studying at home goes better in a bigger, well-furnished home.
+  const boost = (0.6 + (0.4 * mood(day.needs)) / 100) * (def.needsDesk ? studyBonus(sim.profile.home) : 1);
   const parts: string[] = [];
   for (const need of NEED_KEYS) {
-    const delta = def.effects[need];
+    // A bigger home means a better night's sleep.
+    const delta = def.key === "sleep_home" && need === "energy" ? getHouse(sim.profile.home?.house).sleepEnergy : def.effects[need];
     if (!delta) continue;
     day.needs[need] = clamp(day.needs[need] + delta);
   }
@@ -405,6 +408,8 @@ export function activityBlocker(sim: LifeSim, def: ActivityDef, now = Date.now()
   if (!periodAllows(def, period)) return def.closedMessage ?? "Not available right now.";
   const price = priceOf(def, now);
   if (price > sim.profile.coins) return `You need ${formatMoney(price)}`;
+  if (def.needsDesk && !sim.profile.home?.items.desk) return "Put a study desk in your room first — the furniture shop in town sells them.";
+  if (def.dailyMax && def.counter && sim.profile.day.counters[def.counter] >= def.dailyMax) return "You've studied enough at home today. Rest your brain!";
   if (def.job && shiftsLeft(sim.profile.day) === 0) return `You've worked ${MAX_SHIFTS_PER_DAY} shifts today. Time to rest and have fun!`;
   return null;
 }
@@ -421,6 +426,22 @@ export function startActivity(sim: LifeSim, spotId: string, now = Date.now()): S
   const price = priceOf(def, now);
   spend(sim.profile, price, def.label, now);
   sim.activity = { key: def.key, spotId, elapsedMs: 0, durationMs: def.durationSec * 1000, paid: price };
+  return { ok: true };
+}
+
+/** Orders a dish at the Food Court: eaten at the table like any timed activity. */
+export function orderMeal(sim: LifeSim, key: string, now = Date.now()): StartResult {
+  const def = getActivity(key);
+  if (!def || !key.startsWith("meal_")) return { ok: false, reason: "That isn't on the menu." };
+  const spot = nearestSpot(sim);
+  if (!spot || getActivity(spot.activity)?.opens !== "food") return { ok: false, reason: "Walk into the Food Court in town to order." };
+  if (sim.activity) return { ok: false, reason: "You're already busy." };
+  if (sim.profile.day.needs.hunger >= 95) return { ok: false, reason: "You're too full to eat anything else!" };
+  const blocker = activityBlocker(sim, def, now);
+  if (blocker) return { ok: false, reason: blocker };
+  const price = priceOf(def, now);
+  spend(sim.profile, price, def.label, now);
+  sim.activity = { key: def.key, spotId: spot.id, elapsedMs: 0, durationMs: def.durationSec * 1000, paid: price };
   return { ok: true };
 }
 

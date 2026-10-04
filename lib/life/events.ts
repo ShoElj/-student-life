@@ -24,7 +24,7 @@ const WEEK: (WeeklyEvent | null)[] = [
   { key: "market_monday", name: "Market Monday", emoji: "🧺", description: "Half price at the market and Mama Put.", halfPrice: "market" },
   null,
   { key: "sports_wednesday", name: "Sports Wednesday", emoji: "🏅", description: "Double XP from every sports match.", sportsXp: 2 },
-  { key: "treat_thursday", name: "Treat Thursday", emoji: "🍛", description: "Half price at Mama's Bukka.", halfPrice: "bukka" },
+  { key: "treat_thursday", name: "Treat Thursday", emoji: "🍛", description: "Half price at every Food Court restaurant.", halfPrice: "bukka" },
   { key: "movie_friday", name: "Movie Friday", emoji: "🎬", description: "Free entry at the Viewing Centre.", free: "viewing" },
   { key: "super_saturday", name: "Super Saturday", emoji: "💼", description: "Part-time jobs pay 50% more.", jobPay: 1.5 },
 ];

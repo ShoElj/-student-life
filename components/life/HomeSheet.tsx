@@ -6,6 +6,11 @@ import { dateKey } from "@/lib/life/events";
 import {
   furniture,
   getFurniture,
+  getHouse,
+  houses,
+  nextHouse,
+  slotUnlocked,
+  studyBonus,
   petMood,
   pets,
   PET_FOOD_PRICE,
@@ -17,12 +22,16 @@ import {
   type RoomSlot,
 } from "@/lib/life/home";
 import { formatMoney } from "@/lib/life/money";
+import { level } from "@/lib/life/sim";
 import { cn } from "@/lib/utils";
 import { useLifeStore } from "@/store/lifeStore";
 import { LookAvatar } from "./LookPreview";
 
+type BedroomSlot = "poster" | "shelf" | "tv" | "bed" | "desk" | "lamp" | "rug" | "sofa" | "plant" | "petbed";
+const BEDROOM: BedroomSlot[] = ["poster", "shelf", "tv", "bed", "desk", "lamp", "rug", "sofa", "plant", "petbed"];
+
 /** Where each piece of furniture sits in the room picture (percent of width/height). */
-const PLACES: Record<RoomSlot, { left: number; top: number; size: number }> = {
+const PLACES: Record<BedroomSlot, { left: number; top: number; size: number }> = {
   poster: { left: 18, top: 14, size: 34 },
   shelf: { left: 50, top: 12, size: 34 },
   tv: { left: 80, top: 30, size: 40 },
@@ -35,13 +44,34 @@ const PLACES: Record<RoomSlot, { left: number; top: number; size: number }> = {
   petbed: { left: 66, top: 86, size: 30 },
 };
 
-/** A picture of a room: wall, window, floor and whatever furniture is in it. */
+/** One piece of furniture drawn as a big emoji at a spot in a picture. */
+function Thing({ slot, home, left, top, size }: { slot: RoomSlot; home: Home | null; left: number; top: number; size: number }) {
+  const item = getFurniture(home?.items[slot]);
+  if (!item) return null;
+  return (
+    <span
+      title={item.name}
+      className="absolute -translate-x-1/2 -translate-y-1/2 drop-shadow-[0_4px_2px_rgba(0,0,0,0.25)]"
+      style={{ left: `${left}%`, top: `${top}%`, fontSize: `${(size / 4.2).toFixed(1)}cqw` }}
+    >
+      {item.emoji}
+    </span>
+  );
+}
+
+/** A picture of a home: the bedroom, then the kitchen and the yard once the home has them. */
 export function RoomView({ home, title, petDancing = false }: { home: Home | null; title: string; petDancing?: boolean }) {
   const [today] = useState(() => dateKey(Date.now()));
   const pet = home?.pet;
+  const house = getHouse(home?.house);
+  const hasKitchen = slotUnlocked(home ?? undefined, "kitchen");
+  const hasYard = slotUnlocked(home ?? undefined, "garden");
   return (
-    <figure className="mx-auto w-full max-w-xl overflow-hidden rounded-3xl border-4 border-[#7c4a21] shadow-inner" aria-label={title}>
-      <div className="relative aspect-[16/10] w-full select-none [container-type:inline-size]" style={{ background: `linear-gradient(${home?.wall ?? WALL_COLOURS[0]} 0 48%, #c08552 48% 100%)` }}>
+    <figure className="mx-auto w-full max-w-xl overflow-hidden rounded-3xl border-4 border-[#7c4a21] shadow-inner" aria-label={`${title}: ${house.name}`}>
+      <div
+        className="relative aspect-[16/10] w-full select-none [container-type:inline-size]"
+        style={{ background: `linear-gradient(${home?.wall ?? WALL_COLOURS[0]} 0 48%, ${house.floor} 48% 100%)` }}
+      >
         {/* Skirting board, floor planks and a window. */}
         <div className="absolute inset-x-0 top-[48%] h-[3%] bg-[#7c4a21]/60" />
         <div className="absolute inset-x-0 bottom-0 h-[49%] bg-[repeating-linear-gradient(90deg,transparent_0_15%,rgba(0,0,0,0.08)_15%_15.4%)]" />
@@ -49,7 +79,7 @@ export function RoomView({ home, title, petDancing = false }: { home: Home | nul
           <div className="absolute inset-y-0 left-1/2 w-1 -translate-x-1/2 bg-white" />
           <span className="absolute right-1 bottom-0 text-[10px]">☁️</span>
         </div>
-        {ROOM_SLOTS.map(({ slot }) => {
+        {BEDROOM.map((slot) => {
           const item = getFurniture(home?.items[slot]);
           if (!item) return null;
           const at = PLACES[slot];
@@ -63,16 +93,7 @@ export function RoomView({ home, title, petDancing = false }: { home: Home | nul
               />
             );
           }
-          return (
-            <span
-              key={slot}
-              title={item.name}
-              className="absolute -translate-x-1/2 -translate-y-1/2 drop-shadow-[0_4px_2px_rgba(0,0,0,0.25)]"
-              style={{ left: `${at.left}%`, top: `${at.top}%`, fontSize: `${(at.size / 4.2).toFixed(1)}cqw` }}
-            >
-              {item.emoji}
-            </span>
-          );
+          return <Thing key={slot} slot={slot} home={home} {...at} />;
         })}
         {pet && (
           <span
@@ -82,12 +103,94 @@ export function RoomView({ home, title, petDancing = false }: { home: Home | nul
             {pets[pet.kind].emoji}
           </span>
         )}
+        <span className="absolute top-[3%] right-[3%] rounded-full bg-white/80 px-2 py-0.5 text-[3.2cqw] font-black text-[#7c4a21]">
+          {house.emoji} {house.name}
+        </span>
       </div>
+      {hasKitchen && (
+        <div className="relative aspect-[16/5] w-full border-t-4 border-[#7c4a21] bg-[linear-gradient(#e0f2fe_0_45%,#f8fafc_45%_100%)] [container-type:inline-size]">
+          <div className="absolute inset-x-0 bottom-0 h-[55%] bg-[repeating-conic-gradient(#e2e8f0_0_25%,#f8fafc_0_50%)] bg-[length:8%_25%] opacity-80" />
+          <span className="absolute top-[8%] left-[3%] text-[2.8cqw] font-black text-ink/40">KITCHEN &amp; SITTING ROOM</span>
+          <Thing slot="kitchen" home={home} left={14} top={58} size={40} />
+          <Thing slot="dining" home={home} left={50} top={62} size={40} />
+          <Thing slot="gen" home={home} left={86} top={60} size={34} />
+        </div>
+      )}
+      {hasYard && (
+        <div className="relative aspect-[16/5] w-full border-t-4 border-[#7c4a21] bg-[linear-gradient(#bae6fd_0_35%,#86c46d_35%_100%)] [container-type:inline-size]">
+          <span className="absolute top-[8%] left-[3%] text-[2.8cqw] font-black text-ink/40">YARD</span>
+          <span className="absolute top-[6%] right-[8%] text-[6cqw]">☀️</span>
+          <Thing slot="garden" home={home} left={16} top={62} size={42} />
+          <Thing slot="bike" home={home} left={44} top={64} size={36} />
+          <Thing slot="pool" home={home} left={76} top={64} size={46} />
+        </div>
+      )}
       <figcaption className="flex items-center justify-between bg-[#7c4a21] px-3 py-1.5 text-sm font-bold text-white">
         <span className="truncate">{title}</span>
-        <span>Room value {formatMoney(roomValue(home ?? undefined))}</span>
+        <span>Home value {formatMoney(roomValue(home ?? undefined))}</span>
       </figcaption>
     </figure>
+  );
+}
+
+/** Moving up the property ladder: room → self-contain → mini flat → bungalow → duplex. */
+function Homes({ home }: { home: Home }) {
+  const coins = useLifeStore((s) => s.hud?.coins ?? 0);
+  const xp = useLifeStore((s) => s.hud?.xp ?? 0);
+  const myLevel = level(xp);
+  const current = getHouse(home.house);
+  const next = nextHouse(home);
+  const client = getLifeClient();
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="rounded-2xl bg-sun/30 px-3 py-2 text-sm text-ink/80">
+        Grow up the property ladder! Each home needs a <b>level</b> (study and work to level up) and the <b>money</b>. Bigger homes mean better sleep (
+        {current.sleepEnergy} energy now), better studying at your desk (×{studyBonus(home).toFixed(2)}) and more places to furnish.
+      </p>
+      <ol className="flex flex-col gap-2">
+        {houses.map((h) => {
+          const lived = houses.indexOf(h) <= houses.indexOf(current);
+          const isNext = next?.key === h.key;
+          const levelOk = myLevel >= h.minLevel;
+          const canBuy = isNext && levelOk && coins >= h.price;
+          return (
+            <li key={h.key} className={cn("flex items-center gap-3 rounded-2xl border-[3px] p-2.5", h.key === current.key ? "border-leaf bg-leaf/10" : "border-ink/10 bg-white")}>
+              <span className="text-4xl" aria-hidden>
+                {h.emoji}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-base font-extrabold text-ink">{h.name}</span>
+                <span className="block text-xs text-ink/70">{h.blurb}</span>
+                {!lived && (
+                  <span className="text-xs font-bold text-brand">
+                    {formatMoney(h.price)} · <span className={levelOk ? "text-leaf-dark" : "text-danger"}>Level {h.minLevel}</span>
+                  </span>
+                )}
+              </span>
+              {h.key === current.key ? (
+                <span className="shrink-0 rounded-full bg-leaf px-3 py-1 text-xs font-black text-white">You live here</span>
+              ) : lived ? (
+                <span className="shrink-0 text-xs font-bold text-ink/40">Moved out ✓</span>
+              ) : isNext ? (
+                <button
+                  type="button"
+                  disabled={!canBuy}
+                  onClick={() => client?.buyHouse(h.key)}
+                  className="min-h-11 shrink-0 rounded-xl bg-brand px-3 text-sm font-black text-white active:scale-95 disabled:opacity-40"
+                >
+                  {!levelOk ? `🔒 Lv ${h.minLevel}` : coins < h.price ? "Save up" : "Move in"}
+                </button>
+              ) : (
+                <span className="shrink-0 text-lg" aria-label="Locked">
+                  🔒
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+      <p className="text-xs text-ink/50">Tip: keep money in the bank — it earns interest every night while you save for your next home.</p>
+    </div>
   );
 }
 
@@ -96,6 +199,8 @@ function Decorate({ home, shop }: { home: Home; shop: boolean }) {
   const [slot, setSlot] = useState<RoomSlot>("bed");
   const client = getLifeClient();
   const items = furniture.filter((f) => f.slot === slot);
+  const locked = !slotUnlocked(home, slot);
+  const needs = getHouse(ROOM_SLOTS.find((r) => r.slot === slot)?.house);
   return (
     <div className="flex flex-col gap-2">
       <p className={cn("rounded-2xl px-3 py-2 text-sm font-bold", shop ? "bg-leaf/15 text-leaf-dark" : "bg-sun/30 text-ink/80")}>
@@ -111,15 +216,17 @@ function Decorate({ home, shop }: { home: Home; shop: boolean }) {
             onClick={() => setSlot(s.slot)}
             className={cn("min-h-10 shrink-0 rounded-full px-3 text-sm font-bold", slot === s.slot ? "bg-brand text-white" : "bg-ink/5 text-ink")}
           >
+            {slotUnlocked(home, s.slot) ? "" : "🔒 "}
             {s.label}
           </button>
         ))}
       </div>
+      {locked && <p className="rounded-2xl bg-ink/5 px-3 py-2 text-sm font-bold text-ink/70">🔒 You need a {needs.name.toLowerCase()} for this. See the Homes tab in your room.</p>}
       <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {items.map((item) => {
           const owned = home.owned.includes(item.id);
           const placed = home.items[slot] === item.id;
-          const canAct = owned ? !placed : shop && item.price <= coins;
+          const canAct = !locked && (owned ? !placed : shop && item.price <= coins);
           return (
             <li key={item.id}>
               <button
@@ -258,7 +365,7 @@ function Visit() {
         <button type="button" onClick={() => setWho(null)} className="min-h-10 self-start rounded-xl bg-ink/5 px-3 text-sm font-bold text-brand">
           ← Classmates
         </button>
-        <RoomView home={person.home} title={`${person.name}'s room`} />
+        <RoomView home={person.home} title={`${person.name}'s home`} />
         {!person.home?.pet && Object.keys(person.home?.items ?? {}).length <= 1 && <p className="text-sm text-ink/60">{person.name} hasn&apos;t decorated yet.</p>}
       </div>
     );
@@ -287,17 +394,18 @@ function Visit() {
 export function HomeSheet({ mode }: { mode: "home" | "furniture" }) {
   const home = useLifeStore((s) => s.hud?.home ?? null);
   const me = useLifeStore((s) => s.me);
-  const [tab, setTab] = useState<"decorate" | "pet" | "visit">("decorate");
+  const [tab, setTab] = useState<"decorate" | "homes" | "pet" | "visit">("decorate");
   if (!home) return null;
   const shop = mode === "furniture";
   return (
     <div className="flex flex-col gap-3">
-      <RoomView home={home} title={`${me?.name ?? "Your"}'s room`} petDancing />
+      <RoomView home={home} title={`${me?.name ?? "Your"}'s home`} petDancing />
       {!shop && (
-        <div className="grid grid-cols-3 gap-1 rounded-2xl bg-ink/5 p-1" role="tablist" aria-label="Home">
+        <div className="grid grid-cols-4 gap-1 rounded-2xl bg-ink/5 p-1" role="tablist" aria-label="Home">
           {(
             [
-              ["decorate", "🛋️ Decorate"],
+              ["decorate", "🛋️ Room"],
+              ["homes", "🏡 Homes"],
               ["pet", "🐾 Pet"],
               ["visit", "🏘️ Visit"],
             ] as const
@@ -316,6 +424,7 @@ export function HomeSheet({ mode }: { mode: "home" | "furniture" }) {
         </div>
       )}
       {(shop || tab === "decorate") && <Decorate home={home} shop={shop} />}
+      {!shop && tab === "homes" && <Homes home={home} />}
       {!shop && tab === "pet" && <PetCorner home={home} />}
       {!shop && tab === "visit" && <Visit />}
     </div>

@@ -1,6 +1,7 @@
 import type { PeriodKind } from "./clock";
 import type { SportKind } from "./sports";
 import type { WorldKey } from "./worlds";
+import { mealActivities } from "./restaurants";
 import type { CounterKey, NeedKey } from "./types";
 
 export type ActivityEffects = Partial<Record<NeedKey, number>> & { grades?: number; xp?: number };
@@ -31,7 +32,7 @@ export type ActivityDef = {
   counter?: CounterKey;
   job?: JobDef;
   /** Opens a screen (games table, sports, shop, bank) instead of running a timed activity. */
-  opens?: "games" | "sports" | "shop" | "bank" | "home" | "furniture";
+  opens?: "games" | "sports" | "shop" | "bank" | "home" | "furniture" | "food";
   /** For `opens: "sports"`: which sport is played here. */
   sport?: SportKind;
   /** Taking the bus: when the wait is over the student arrives in this world. */
@@ -40,6 +41,10 @@ export type ActivityDef = {
   tag?: "market" | "bukka" | "viewing";
   /** Breaking a school rule: a chance of being caught by a prefect, and what it costs. */
   risk?: Risk;
+  /** Can only be done this many times a day (counted by `counter`). */
+  dailyMax?: number;
+  /** Needs a study desk in your room. */
+  needsDesk?: boolean;
 };
 
 export type Risk = {
@@ -534,6 +539,18 @@ export const activities: Record<string, ActivityDef> = {
     effects: { energy: 50 },
     counter: "rest",
   },
+  study_home: {
+    key: "study_home",
+    label: "Study at your desk",
+    emoji: "📖",
+    verb: "studying at home",
+    durationSec: 12,
+    cost: 0,
+    effects: { grades: 6, xp: 8, energy: -5, fun: -3 },
+    counter: "homeStudy",
+    dailyMax: 3,
+    needsDesk: true,
+  },
   salon_look: {
     key: "salon_look",
     label: "Get a new look",
@@ -618,9 +635,19 @@ export const activities: Record<string, ActivityDef> = {
     counter: "shifts",
     job: { basePay: 300, perClassmate: 100, maxExtra: 400, where: "Market, in town" },
   },
+  food_court: {
+    key: "food_court",
+    label: "Order food",
+    emoji: "🍽️",
+    verb: "ordering",
+    durationSec: 0,
+    cost: 0,
+    effects: {},
+    opens: "food",
+  },
   eat_together: {
     key: "eat_together",
-    label: "Eat at the bukka",
+    label: "Share a big plate at Mama's Bukka",
     emoji: "🍛",
     verb: "eating at the bukka",
     durationSec: 10,
@@ -651,6 +678,9 @@ export const activities: Record<string, ActivityDef> = {
   },
 
 };
+
+// Every dish at the Food Court.
+Object.assign(activities, mealActivities());
 
 export const jobKeys = Object.values(activities)
   .filter((a) => a.job)

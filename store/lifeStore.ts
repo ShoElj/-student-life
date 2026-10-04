@@ -70,7 +70,7 @@ export type GameSession = {
 };
 
 /** A screen the client asks the game UI to open. */
-export type SheetRequest = "games" | "sports" | "shop" | "bank" | "home" | "furniture";
+export type SheetRequest = "games" | "sports" | "shop" | "bank" | "home" | "furniture" | "food";
 
 /** A sports match: both players play the same seeded challenge and compare scores. */
 export type SportMatch = {

@@ -21,6 +21,9 @@ import { dateKey, eventFor } from "./events";
 import {
   adoptPet,
   buyFurniture,
+  buyHouse,
+  getHouse,
+  type HouseKey,
   feedPet,
   getFurniture,
   newHome,
@@ -62,6 +65,7 @@ import {
   receiveSocial,
   sendSocial,
   startActivity,
+  orderMeal,
   stepLife,
   type LifeEvent,
   type LifeSim,
@@ -461,7 +465,7 @@ export class LifeClient {
           break;
         case "travelled":
           playSound("bus");
-          store.toast(e.world === "town" ? "🚌 Welcome to town! Visit your home, the market and the football park." : "🚌 Back at school!", "info");
+          store.toast(e.world === "town" ? "🚌 Welcome to town! Visit your home, the Food Court and the football park." : "🚌 Back at school!", "info");
           this.sendPresence(true);
           void this.save(true);
           break;
@@ -592,6 +596,22 @@ export class LifeClient {
   // -------------------------------------------------------------------------
   // Player actions
   // -------------------------------------------------------------------------
+
+  /** Orders a dish at the Food Court. */
+  orderMeal(key: string): boolean {
+    const store = useLifeStore.getState();
+    const result = orderMeal(this.sim, key);
+    if (!result.ok) {
+      store.toast(result.reason, "bad");
+      return false;
+    }
+    const def = getActivity(key);
+    playSound("coin");
+    store.toast(`${def?.emoji ?? "🍽️"} Enjoy your ${def?.label.split(" at ")[0].toLowerCase() ?? "meal"}! 😋`, "good");
+    this.sendPresence(true);
+    this.publishHud(Date.now());
+    return true;
+  }
 
   doActivity(): void {
     const spot = nearestSpot(this.sim);
@@ -1096,6 +1116,17 @@ export class LifeClient {
     void this.save(true);
     this.publishHud(Date.now());
     return true;
+  }
+
+  /** Moves up to a bigger home (from your room in town). */
+  buyHouse(key: HouseKey): boolean {
+    const house = getHouse(key);
+    const moved = this.homeAction("home", () => buyHouse(this.sim.profile, key, level(this.sim.profile.xp)), `${house.emoji} Welcome to your new ${house.name.toLowerCase()}!`);
+    if (moved) {
+      playSound("winner");
+      vibrate([30, 40, 30]);
+    }
+    return moved;
   }
 
   buyFurniture(itemId: string): boolean {

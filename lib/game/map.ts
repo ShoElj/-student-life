@@ -64,6 +64,8 @@ export type Obstacle = Rect & {
   penalizes: boolean;
   color: string;
   emoji?: string;
+  /** A small sign under it, like a shop's name. */
+  caption?: string;
 };
 
 export const obstacles: Obstacle[] = [

@@ -4,11 +4,12 @@
  *
  *   North of Main Road: Your Home · Barber & Salon · Supermarket & Furniture · Viewing Centre · Town Bank
  *   Main Road (east end: Bus Park)
- *   South of Main Road: Market · Mama's Bukka · Football Park · Church & Mosque Square
+ *   South of Main Road: Market · Food Court (Nigerian restaurants) · Football Park · Church & Mosque Square
  */
 import type { Obstacle } from "@/lib/game/map";
 import type { Point } from "@/lib/game/types";
 import type { Decoration, LifeZone, Spot } from "./map";
+import { restaurants } from "./restaurants";
 
 export const TOWN_WORLD = { width: 2700, height: 1460 } as const;
 
@@ -56,7 +57,7 @@ export const townZones: LifeZone[] = [
   place("townbank", "Town Bank", 1900, NORTH_Y, 400, NORTH_H, "#e2e8f0", "tiles"),
   // South.
   place("market", "Market", 60, SOUTH_Y, 660, SOUTH_H, "#e7d3b0", "paving"),
-  place("bukka", "Mama's Bukka", 780, SOUTH_Y, 380, SOUTH_H, "#fde7c8", "tiles"),
+  place("bukka", "Food Court", 780, SOUTH_Y, 380, SOUTH_H, "#fde7c8", "tiles"),
   place("park", "Football Park", 1220, SOUTH_Y, 640, SOUTH_H, "#8fd16f", "stripes"),
   place("square", "Church & Mosque Square", 1920, SOUTH_Y, 440, SOUTH_H, "#e7e5e4", "paving"),
 
@@ -85,10 +86,30 @@ const solid = (id: string, label: string, x: number, y: number, width: number, h
   emoji,
 });
 
+/** The restaurant stalls: two each side of the door along the top, then down both walls. */
+function foodStalls(): Obstacle[] {
+  const places = [
+    { x: 790, y: 876, w: 64, h: 44 },
+    { x: 862, y: 876, w: 60, h: 44 },
+    { x: 1018, y: 876, w: 64, h: 44 },
+    { x: 1090, y: 876, w: 60, h: 44 },
+    { x: 790, y: 990, w: 56, h: 52 },
+    { x: 790, y: 1080, w: 56, h: 52 },
+    { x: 790, y: 1170, w: 56, h: 52 },
+    { x: 1094, y: 990, w: 56, h: 52 },
+    { x: 1094, y: 1080, w: 56, h: 52 },
+  ];
+  return places.map((p, i) => {
+    const r = restaurants[i];
+    return { ...solid(`stall_${r.id}`, r.name, p.x, p.y, p.w, p.h, r.color, r.emoji), caption: r.sign };
+  });
+}
+
 export const townFurniture: Obstacle[] = [
   // Your Home.
   solid("home_bed", "Bed", 80, 140, 100, 70, "#60a5fa", "🛏️"),
-  solid("home_wardrobe", "Wardrobe", 380, 136, 80, 40, "#92400e", "🚪"),
+  solid("home_wardrobe", "Wardrobe", 200, 136, 80, 40, "#92400e", "🚪"),
+  solid("home_desk", "Desk", 380, 136, 80, 30, "#b45309", "📚"),
   solid("home_table", "Table", 370, 420, 90, 40, "#b45309", "🍽️"),
   // Barber & Salon.
   solid("salon_chair_1", "Barber chair", 570, 150, 60, 50, "#be185d", "💈"),
@@ -113,10 +134,11 @@ export const townFurniture: Obstacle[] = [
   solid("stall_2", "Fish stall", 250, 1240, 120, 50, "#0284c7", "🐟"),
   solid("stall_3", "Fruit stall", 560, 900, 130, 50, "#16a34a", "🍌"),
   solid("mama_put", "Mama Put", 90, 890, 150, 50, "#ea580c", "🍲"),
-  // Mama's Bukka.
-  solid("bukka_table_1", "Table", 820, 1000, 80, 50, "#c2410c", "🍛"),
-  solid("bukka_table_2", "Table", 1040, 1000, 80, 50, "#c2410c", "🍛"),
-  solid("bukka_counter", "Counter", 820, 1360, 300, 20, "#a16207"),
+  // Food Court: a stall for each restaurant around the walls, tables in the middle.
+  ...foodStalls(),
+  solid("food_table_1", "Table", 880, 1180, 60, 36, "#c2410c", "🍽️"),
+  solid("food_table_2", "Table", 1000, 1180, 60, 36, "#c2410c", "🍽️"),
+  solid("bukka_counter", "Mama's Bukka", 820, 1360, 300, 20, "#a16207"),
   // Church & Mosque Square.
   solid("church", "Church", 1950, 1240, 150, 130, "#e5e7eb", "⛪"),
   solid("mosque", "Mosque", 2180, 1240, 150, 130, "#d1fae5", "🕌"),
@@ -142,6 +164,7 @@ export const townSpots: Spot[] = [
   // Your Home.
   { id: "my_room", activity: "my_room", x: 300, y: 300, radius: 110, label: "Your room" },
   { id: "sleep_home", activity: "sleep_home", x: 130, y: 250, radius: 60, label: "Your bed" },
+  { id: "study_home", activity: "study_home", x: 410, y: 210, radius: 55, label: "Your desk" },
   // Barber & Salon.
   { id: "salon", activity: "salon_look", x: 700, y: 280, radius: 90, label: "Barber & Salon" },
   { id: "salon_job", activity: "salon_job", x: 610, y: 470, radius: 50, label: "Salon broom" },
@@ -158,8 +181,9 @@ export const townSpots: Spot[] = [
   { id: "mama_put", activity: "mama_put", x: 165, y: 1000, radius: 70, label: "Mama Put" },
   { id: "fruit", activity: "buy_fruit", x: 625, y: 1010, radius: 60, label: "Fruit stall" },
   { id: "market_stall", activity: "market_stall", x: 310, y: 1180, radius: 70, label: "Market stall" },
-  // Mama's Bukka.
-  { id: "bukka", activity: "eat_together", x: 970, y: 1150, radius: 110, label: "Mama's Bukka" },
+  // Food Court.
+  { id: "food_court", activity: "food_court", x: 970, y: 1050, radius: 110, label: "Food Court" },
+  { id: "bukka", activity: "eat_together", x: 970, y: 1300, radius: 60, label: "Mama's Bukka" },
   // Football Park.
   { id: "park_football", activity: "park_football", x: 1540, y: 1130, radius: 180, label: "Football Park" },
   // Church & Mosque Square.

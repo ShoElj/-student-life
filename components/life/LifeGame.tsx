@@ -20,11 +20,12 @@ import { LookAvatar } from "./LookPreview";
 import { WalletSheet, type WalletTab } from "./WalletSheet";
 import { MapSheet } from "./MapSheet";
 import { HomeSheet } from "./HomeSheet";
+import { FoodSheet } from "./FoodSheet";
 import { EventsList, LeaderboardSheet, StreakCard } from "./Community";
 import { SportsSheet } from "./SportsSheet";
 import { WardrobeSheet } from "./WardrobeSheet";
 
-type Sheet = { kind: "goals" } | { kind: "wallet"; tab?: WalletTab; to?: string } | { kind: "chat"; thread?: string } | { kind: "games" } | { kind: "sports" } | { kind: "map" } | { kind: "home"; mode: "home" | "furniture" } | { kind: "leaderboard" } | { kind: "events" } | { kind: "wardrobe" } | { kind: "people" } | { kind: "menu" } | { kind: "talk"; id: string } | null;
+type Sheet = { kind: "goals" } | { kind: "wallet"; tab?: WalletTab; to?: string } | { kind: "chat"; thread?: string } | { kind: "games" } | { kind: "sports" } | { kind: "map" } | { kind: "home"; mode: "home" | "furniture" } | { kind: "leaderboard" } | { kind: "food" } | { kind: "events" } | { kind: "wardrobe" } | { kind: "people" } | { kind: "menu" } | { kind: "talk"; id: string } | null;
 
 const NEEDS: { key: NeedKey; emoji: string; label: string }[] = [
   { key: "energy", emoji: "⚡", label: "Energy" },
@@ -522,7 +523,9 @@ export function LifeGame() {
             ? { kind: "sports" }
             : sheetRequest === "home" || sheetRequest === "furniture"
               ? { kind: "home", mode: sheetRequest }
-              : { kind: "games" };
+              : sheetRequest === "food"
+                ? { kind: "food" }
+                : { kind: "games" };
     queueMicrotask(() => setSheet(next));
   }, [sheetRequest]);
 
@@ -613,6 +616,11 @@ export function LifeGame() {
       {sheet?.kind === "home" && (
         <BottomSheet title={sheet.mode === "furniture" ? "Furniture shop" : "Your home"} onClose={close}>
           <HomeSheet mode={sheet.mode} />
+        </BottomSheet>
+      )}
+      {sheet?.kind === "food" && (
+        <BottomSheet title="Food Court" onClose={close}>
+          <FoodSheet onOrdered={close} />
         </BottomSheet>
       )}
       {sheet?.kind === "leaderboard" && (

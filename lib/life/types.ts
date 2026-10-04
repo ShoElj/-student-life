@@ -10,6 +10,7 @@ export type Needs = Record<NeedKey, number>;
 export type CounterKey =
   | "lessons"
   | "study"
+  | "homeStudy"
   | "meals"
   | "snacks"
   | "football"
