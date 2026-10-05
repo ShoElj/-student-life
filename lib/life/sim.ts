@@ -13,6 +13,7 @@ import { SPORT_MIN_ENERGY, sports, type SportKind } from "./sports";
 import { eventFor, visit } from "./events";
 import { getHouse, newHome, studyBonus } from "./home";
 import { addStars, STAR_RULES } from "./stars";
+import { cgpa as cgpaOf, DAYS_PER_LEVEL, jobFor, recordResult, recordShift, type UniEvent } from "./university";
 import type { Spot } from "./map";
 import { worlds, type WorldKey } from "./worlds";
 import {
@@ -63,7 +64,8 @@ export type LifeEvent =
   | { kind: "new_day"; dayIndex: number }
   | { kind: "travelled"; world: WorldKey }
   | { kind: "streak"; count: number; reward: number }
-  | { kind: "caught"; key: string; text: string; detentionSec: number };
+  | { kind: "caught"; key: string; text: string; detentionSec: number }
+  | UniEvent;
 
 export type LifeSim = {
   studentId: string;
@@ -92,6 +94,7 @@ function emptyCounters(): Counters {
     lessons: 0,
     study: 0,
     homeStudy: 0,
+    work: 0,
     meals: 0,
     snacks: 0,
     football: 0,
@@ -169,10 +172,26 @@ export function level(xp: number): number {
   return 1 + Math.floor(Math.sqrt(xp / 40));
 }
 
-/** Ends the day: parents pay a reward for a good grade, then the report card is shown. */
-function closeDay(profile: LifeProfile, now: number): ReportCard {
+/**
+ * Ends the day: parents pay a reward for a good grade, the result counts towards the CGPA (and
+ * maybe the next level or graduation), then the report card is shown. Graduates have no report.
+ */
+function closeDay(profile: LifeProfile, now: number): LifeEvent[] {
   const day = profile.day;
   day.reportShown = true;
+  if (profile.uni?.graduated) return [];
+  const report = schoolReport(profile, now);
+  const uni = profile.uni;
+  if (!uni) return [{ kind: "report_card", report }];
+  const events: LifeEvent[] = recordResult(uni, report.grade, day.dayIndex, now);
+  for (const e of events) if (e.kind === "graduated") earn(profile, e.gift, "Graduation gift from family", now);
+  // The level this result belongs to (the student may have just moved up).
+  report.uni = { course: uni.course, level: uni.results[0]?.level ?? uni.level, gp: uni.results[0]?.gp ?? 0, cgpa: uni.graduated?.cgpa ?? cgpaOf(uni), passedDays: uni.passedDays, needed: DAYS_PER_LEVEL };
+  return [{ kind: "report_card", report }, ...events];
+}
+
+function schoolReport(profile: LifeProfile, now: number): ReportCard {
+  const day = profile.day;
   const grade = gradeLetter(day.gradePoints);
   const caught = day.counters.caught ?? 0;
   const conduct = conductGrade(caught);
@@ -194,7 +213,7 @@ function closeDay(profile: LifeProfile, now: number): ReportCard {
   };
 }
 
-/** Behaviour on the report card, from how many times a prefect caught you today. */
+/** Behaviour on the report card, from how many times you were caught today. */
 export function conductGrade(caught: number): string {
   return caught === 0 ? "Excellent" : caught === 1 ? "Good" : caught === 2 ? "Fair" : "Poor";
 }
@@ -202,7 +221,7 @@ export function conductGrade(caught: number): string {
 /** Where detention is served: the front of Classroom A. */
 const DETENTION_SPOT = { x: 210, y: 760 };
 
-/** A prefect caught the student breaking a rule: fines, lost grades and maybe detention. */
+/** The student was caught breaking a rule: fines, lost grades and maybe detention. */
 function getCaught(sim: LifeSim, def: ActivityDef, now: number): LifeEvent {
   const risk = def.risk!;
   const day = sim.profile.day;
@@ -285,9 +304,12 @@ function startDay(sim: LifeSim, dayIndex: number, now: number): LifeEvent[] {
     record(profile, "Interest on savings", interest, now);
     events.push({ kind: "money_in", label: "Interest on your savings", amount: interest });
   }
-  const pocket = POCKET_MONEY * (eventFor(now)?.pocketMoney ?? 1);
-  earn(profile, pocket, "Pocket money", now);
-  events.push({ kind: "money_in", label: "Pocket money", amount: pocket });
+  // Graduates earn a salary instead of pocket money.
+  if (!profile.uni?.graduated) {
+    const pocket = POCKET_MONEY * (eventFor(now)?.pocketMoney ?? 1);
+    earn(profile, pocket, "Pocket money", now);
+    events.push({ kind: "money_in", label: "Pocket money", amount: pocket });
+  }
   events.push(...checkStreak(sim, now));
   return events;
 }
@@ -369,6 +391,14 @@ function applyActivity(sim: LifeSim, def: ActivityDef, classmatesAtSchool: numbe
     earn(sim.profile, pay, `Job: ${def.label}`, now);
     parts.unshift(`+${formatMoney(pay)}`);
   }
+  const uni = sim.profile.uni;
+  const job = def.key === "career_work" ? jobFor(uni) : null;
+  if (job && uni) {
+    earn(sim.profile, job.pay, `Salary: ${job.title}`, now);
+    parts.unshift(`+${formatMoney(job.pay)}`);
+    // A promotion is announced on the next step.
+    sim.pending.push(...recordShift(uni));
+  }
   if (def.counter) bump(sim, def.counter);
   return parts.join(" · ");
 }
@@ -409,7 +439,9 @@ export function activityBlocker(sim: LifeSim, def: ActivityDef, now = Date.now()
   const price = priceOf(def, now);
   if (price > sim.profile.coins) return `You need ${formatMoney(price)}`;
   if (def.needsDesk && !sim.profile.home?.items.desk) return "Put a study desk in your room first — the furniture shop in town sells them.";
-  if (def.dailyMax && def.counter && sim.profile.day.counters[def.counter] >= def.dailyMax) return "You've studied enough at home today. Rest your brain!";
+  if (def.dailyMax && def.counter && sim.profile.day.counters[def.counter] >= def.dailyMax) return def.limitMessage ?? "That's enough for today.";
+  if (def.counter === "lessons" && sim.profile.uni?.graduated) return "You've graduated! Your job is at the Office Complex in town.";
+  if (def.key === "career_work" && !sim.profile.uni?.graduated) return "The Office Complex only hires graduates. Finish 400 level first!";
   if (def.job && shiftsLeft(sim.profile.day) === 0) return `You've worked ${MAX_SHIFTS_PER_DAY} shifts today. Time to rest and have fun!`;
   return null;
 }
@@ -469,7 +501,7 @@ export function stepLife(
 
   // New school day.
   if (profile.day.dayIndex !== time.dayIndex) {
-    if (!profile.day.reportShown) events.push({ kind: "report_card", report: closeDay(profile, now) });
+    if (!profile.day.reportShown) events.push(...closeDay(profile, now));
     if (sim.activity) cancelActivity(sim, "A new day has started.", now);
     events.push({ kind: "new_day", dayIndex: time.dayIndex });
     events.push(...startDay(sim, time.dayIndex, now));
@@ -538,7 +570,7 @@ export function stepLife(
   events.push(...checkGoals(sim));
 
   if (time.period.kind === "home" && !day.reportShown) {
-    events.push({ kind: "report_card", report: closeDay(profile, now) });
+    events.push(...closeDay(profile, now));
   }
   return events;
 }

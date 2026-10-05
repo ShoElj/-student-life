@@ -35,7 +35,7 @@ await run(async (browser) => {
   check(await a.getByRole("button", { name: /Chat, \d+ unread/ }).waitFor({ timeout: 30_000 }).then(() => true, () => false), "private message shows as unread");
 
   // Tic-tac-toe: A invites B and wins with a row along the top.
-  // Each player is a tab here, and Chrome slows down background tabs; after 8 seconds without
+  // Each player is a tab here, and Chrome slows down background tabs; after 20 seconds without
   // news a classmate counts as gone. So switch between them often, like two real phones.
   await b.bringToFront();
   await b.waitForTimeout(1500);

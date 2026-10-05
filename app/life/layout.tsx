@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 
-const title = "Student Life — a Nigerian school life game";
+const title = "Student Life — a Nigerian university life game";
 const description =
-  "Start a school with your friends: go to class, earn and save Naira, play football and ten-ten, eat jollof and suya at the Food Court, buy your dream home and top the weekly leaderboard. Free, in the browser.";
+  "Start a university with your friends: pick a course, study from 100 Level to 400 Level, graduate and start your career. Earn and save Naira, play football and ten-ten, eat jollof and suya at the Food Court, buy your dream home and top the weekly leaderboard. Free, in the browser.";
 
 export const metadata: Metadata = {
   title,

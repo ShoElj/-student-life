@@ -39,12 +39,14 @@ export type ActivityDef = {
   travelTo?: WorldKey;
   /** Weekly events can make tagged activities cheaper or free. */
   tag?: "market" | "bukka" | "viewing";
-  /** Breaking a school rule: a chance of being caught by a prefect, and what it costs. */
+  /** Breaking a rule: a chance of being caught (by a lecturer or campus security), and what it costs. */
   risk?: Risk;
   /** Can only be done this many times a day (counted by `counter`). */
   dailyMax?: number;
   /** Needs a study desk in your room. */
   needsDesk?: boolean;
+  /** What to say once `dailyMax` is reached. */
+  limitMessage?: string;
 };
 
 export type Risk = {
@@ -73,14 +75,14 @@ export const activities: Record<string, ActivityDef> = {
   },
   attend_lesson: {
     key: "attend_lesson",
-    label: "Attend lesson",
+    label: "Attend lecture",
     emoji: "📝",
-    verb: "in class",
+    verb: "in a lecture",
     durationSec: 20,
     cost: 0,
     effects: { grades: 12, energy: -6, fun: -3, xp: 15 },
     periods: ["lesson"],
-    closedMessage: "No lesson right now — study in the library instead.",
+    closedMessage: "No lecture right now — study in the library instead.",
     counter: "lessons",
   },
   study: {
@@ -280,7 +282,7 @@ export const activities: Record<string, ActivityDef> = {
     periods: ["lesson"],
     closedMessage: "Only works when there's a lesson to be bored in!",
     counter: "mischief",
-    risk: { chance: 0.35, caughtText: "📱 A prefect took your phone! Fine ₦300 to get it back.", fine: 300, grades: -5 },
+    risk: { chance: 0.35, caughtText: "📱 The lecturer seized your phone! Fine ₦300 to get it back.", fine: 300, grades: -5 },
   },
   eat_in_class: {
     key: "eat_in_class",
@@ -319,7 +321,7 @@ export const activities: Record<string, ActivityDef> = {
     periods: ["lesson"],
     closedMessage: "There's no class to skip right now.",
     counter: "mischief",
-    risk: { chance: 0.3, caughtText: "🙈 A prefect found you skipping class — detention!", detentionSec: 20, grades: -10 },
+    risk: { chance: 0.3, caughtText: "🙈 Campus security found you skipping lectures — detention!", detentionSec: 20, grades: -10 },
   },
   // The rest of the school.
   water_crops: {
@@ -539,6 +541,18 @@ export const activities: Record<string, ActivityDef> = {
     effects: { energy: 50 },
     counter: "rest",
   },
+  career_work: {
+    key: "career_work",
+    label: "Go to work",
+    emoji: "👔",
+    verb: "at work",
+    durationSec: 20,
+    cost: 0,
+    effects: { energy: -10, fun: -4, xp: 10 },
+    counter: "work",
+    dailyMax: 3,
+    limitMessage: "You've worked 3 shifts today. Rest and come back tomorrow!",
+  },
   study_home: {
     key: "study_home",
     label: "Study at your desk",
@@ -549,6 +563,7 @@ export const activities: Record<string, ActivityDef> = {
     effects: { grades: 6, xp: 8, energy: -5, fun: -3 },
     counter: "homeStudy",
     dailyMax: 3,
+    limitMessage: "You've studied enough at home today. Rest your brain!",
     needsDesk: true,
   },
   salon_look: {

@@ -3,7 +3,7 @@
  * can stay as long as they like: the town is open at any time of the school day.
  *
  *   North of Main Road: Your Home · Barber & Salon · Supermarket & Furniture · Viewing Centre · Town Bank
- *   Main Road (east end: Bus Park)
+ *   Main Road (east end: Bus Park, with the Office Complex for graduates just south of it)
  *   South of Main Road: Market · Food Court (Nigerian restaurants) · Football Park · Church & Mosque Square
  */
 import type { Obstacle } from "@/lib/game/map";
@@ -60,6 +60,8 @@ export const townZones: LifeZone[] = [
   place("bukka", "Food Court", 780, SOUTH_Y, 380, SOUTH_H, "#fde7c8", "tiles"),
   place("park", "Football Park", 1220, SOUTH_Y, 640, SOUTH_H, "#8fd16f", "stripes"),
   place("square", "Church & Mosque Square", 1920, SOUTH_Y, 440, SOUTH_H, "#e7e5e4", "paving"),
+  // Where graduates work.
+  place("office", "Office Complex", 2420, 1100, 240, 300, "#e0e7ff", "tiles"),
 
   northDoor("home", 230),
   northDoor("salon", 660),
@@ -71,6 +73,7 @@ export const townZones: LifeZone[] = [
   southDoor("park", 1500),
   southDoor("square", 2100),
   door("busDoor", 2360, ROAD_Y, 60, ROAD_H),
+  door("officeDoor", 2500, 1020, 80, 80),
 ];
 
 const solid = (id: string, label: string, x: number, y: number, width: number, height: number, color: string, emoji?: string): Obstacle => ({
@@ -145,6 +148,10 @@ export const townFurniture: Obstacle[] = [
   solid("fountain", "Fountain", 2100, 960, 80, 60, "#7dd3fc", "⛲"),
   // Bus Park.
   solid("bus", "Bus", 2560, 400, 80, 150, "#facc15", "🚌"),
+  // Office Complex: two desks and a reception counter.
+  solid("office_desk_1", "Desk", 2440, 1180, 70, 34, "#475569", "💻"),
+  solid("office_desk_2", "Desk", 2580, 1180, 70, 34, "#475569", "🗂️"),
+  solid("office_reception", "Reception", 2450, 1350, 180, 22, "#1e3a8a"),
 ];
 
 export const townDecorations: Decoration[] = [
@@ -177,6 +184,8 @@ export const townSpots: Spot[] = [
   { id: "townbank", activity: "school_bank", x: 2100, y: 300, radius: 100, label: "Town Bank" },
   // Bus Park.
   { id: "bus_to_school", activity: "bus_to_school", x: 2530, y: 640, radius: 80, label: "Bus to school" },
+  // Office Complex.
+  { id: "office", activity: "career_work", x: 2540, y: 1270, radius: 80, label: "Your desk at work" },
   // Market.
   { id: "mama_put", activity: "mama_put", x: 165, y: 1000, radius: 70, label: "Mama Put" },
   { id: "fruit", activity: "buy_fruit", x: 625, y: 1010, radius: 60, label: "Fruit stall" },

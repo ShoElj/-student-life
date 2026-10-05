@@ -1,3 +1,4 @@
+import type { CourseKey, Uni, UniSummary } from "./university";
 import type { Look } from "@/lib/game/art/students";
 import type { Direction } from "@/lib/game/types";
 import type { Streak } from "./events";
@@ -11,6 +12,7 @@ export type CounterKey =
   | "lessons"
   | "study"
   | "homeStudy"
+  | "work"
   | "meals"
   | "snacks"
   | "football"
@@ -64,7 +66,9 @@ export type LifeProfile = {
   world?: WorldKey;
   home?: Home;
   streak?: Streak;
-  stats?: { sportsWins: number; gamesWins: number; /** Star points this week (see stars.ts). */ stars?: number; starsWeek?: string };
+  stats?: { sportsWins: number; gamesWins: number; /** Star points this week (see stars.ts). */ stars?: number; starsWeek?: string; /** What classmates see of my studies. */ uni?: UniSummary };
+  /** Course, level, results and (after graduating) job. Missing until a course is chosen. */
+  uni?: Uni;
   /** Ids of the last money transfers collected, so the same transfer is never paid twice. */
   claimed?: number[];
 };
@@ -98,9 +102,11 @@ export type ReportCard = {
   goalsDone: number;
   goalsTotal: number;
   mood: number;
-  /** Behaviour grade from how often a prefect caught you breaking rules. */
+  /** Behaviour grade from how often you were caught breaking rules. */
   conduct: string;
   caught: number;
+  /** University result for the day (not for graduates). */
+  uni?: { course: CourseKey; level: number; gp: number; cgpa: number; passedDays: number; needed: number };
 };
 
 export type SocialKind = "hi" | "help" | "share";

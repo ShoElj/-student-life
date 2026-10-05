@@ -1,3 +1,4 @@
+import type { Job, Uni, UniSummary } from "@/lib/life/university";
 import { create } from "zustand";
 import type { Look } from "@/lib/game/art/students";
 import type { PeriodKind } from "@/lib/life/clock";
@@ -40,9 +41,16 @@ export type LifeHud = {
   /** Seconds of detention left (0 when free). */
   detentionLeft: number;
   caughtToday: number;
+  /** Course, level and results (null until a course is chosen). */
+  uni: Uni | null;
+  /** A graduate's job. */
+  job: Job | null;
 };
 
-export type RosterStats = { stars: number; level: number; savings: number; sportsWins: number; roomValue: number };
+/** A big moment worth a full-screen card: a new level, graduation, a promotion at work. */
+export type Celebration = { emoji: string; title: string; text: string; lines?: string[] };
+
+export type RosterStats = { stars: number; level: number; savings: number; sportsWins: number; roomValue: number; uni?: UniSummary };
 
 export type RosterEntry = {
   id: string;
@@ -100,6 +108,7 @@ type LifeStore = {
   report: ReportCard | null;
   /** The daily streak card shown on arrival. */
   streakCard: { count: number; reward: number } | null;
+  celebration: Celebration | null;
   /** School chat and my private conversations, oldest first. */
   messages: ChatMessage[];
   /** Last message id read in each conversation ("school" or a classmate's id). */
@@ -134,6 +143,7 @@ const initial = {
   toasts: [] as LifeToast[],
   report: null,
   streakCard: null as { count: number; reward: number } | null,
+  celebration: null as Celebration | null,
   messages: [] as ChatMessage[],
   chatRead: {} as Record<string, number>,
   muted: [] as string[],

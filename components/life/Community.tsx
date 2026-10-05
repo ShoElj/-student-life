@@ -5,25 +5,32 @@ import { getLifeClient } from "@/lib/life/client";
 import { streakReward, upcomingEvents } from "@/lib/life/events";
 import { roomValue } from "@/lib/life/home";
 import { formatMoney } from "@/lib/life/money";
-import { level } from "@/lib/life/sim";
+import { uniRankValue, uniSummary, type UniSummary } from "@/lib/life/university";
+import { standingLabel } from "./StudiesSheet";
 import { starsThisWeek, STAR_RULES } from "@/lib/life/stars";
 import { cn } from "@/lib/utils";
 import { useLifeStore } from "@/store/lifeStore";
 import { LookAvatar } from "./LookPreview";
 
-type Board = "stars" | "level" | "savings" | "sports" | "room";
+type Board = "stars" | "uni" | "savings" | "sports" | "room";
 
 const BOARDS: { key: Board; label: string; show: (v: number) => string }[] = [
   { key: "stars", label: "🌟 This week", show: (v) => `${v} ★` },
-  { key: "level", label: "⭐ Level", show: (v) => `Level ${v}` },
+  { key: "uni", label: "🎓 Uni", show: () => "" },
   { key: "savings", label: "🏦 Savings", show: (v) => formatMoney(v) },
   { key: "sports", label: "🏅 Sports wins", show: (v) => `${v} win${v === 1 ? "" : "s"}` },
   { key: "room", label: "🏠 Best home", show: (v) => formatMoney(v) },
 ];
 
-/** Who's top of the school: this week's star points, then level, savings, sports wins and the best room. */
+/** "CSC · 300L · 3.80" or "CSC · 2:1 grad" for the university board. */
+function uniLabel(uni: UniSummary | undefined): string {
+  if (!uni) return "–";
+  return uni.degree ? `${standingLabel(uni)}` : `${standingLabel(uni)} · ${uni.cgpa.toFixed(2)}`;
+}
+
+/** Who's top of the school: this week's star points, then university standing, savings, sports wins and the best home. */
 export function LeaderboardSheet() {
-  const [board, setBoard] = useState<Board>("stars")
+  const [board, setBoard] = useState<Board>("stars");
   const [now] = useState(() => Date.now());
   const roster = useLifeStore((s) => s.roster);
   const hud = useLifeStore((s) => s.hud);
@@ -33,19 +40,20 @@ export function LeaderboardSheet() {
 
   const mine = {
     stars: starsThisWeek(client?.sim.profile.stats, now),
-    level: level(hud.xp),
+    uni: uniRankValue(uniSummary(hud.uni ?? undefined)),
     savings: hud.savings,
     sports: client?.sim.profile.stats?.sportsWins ?? 0,
     room: roomValue(hud.home ?? undefined),
   };
   const rows = [
-    { id: me.id, name: `${me.name} (you)`, look: useLifeStore.getState().look, value: mine[board], isMe: true },
+    { id: me.id, name: `${me.name} (you)`, look: useLifeStore.getState().look, value: mine[board], isMe: true, uni: uniSummary(hud.uni ?? undefined) },
     ...roster.map((r) => ({
       id: r.id,
       name: r.name,
       look: r.look,
       isMe: false,
-      value: r.stats ? { stars: r.stats.stars, level: r.stats.level, savings: r.stats.savings, sports: r.stats.sportsWins, room: r.stats.roomValue }[board] : 0,
+      uni: r.stats?.uni,
+      value: r.stats ? { stars: r.stats.stars, uni: uniRankValue(r.stats.uni), savings: r.stats.savings, sports: r.stats.sportsWins, room: r.stats.roomValue }[board] : 0,
     })),
   ].sort((a, b) => b.value - a.value || a.name.localeCompare(b.name));
   const show = BOARDS.find((b) => b.key === board)!.show;
@@ -68,9 +76,10 @@ export function LeaderboardSheet() {
       </div>
       {board === "stars" && (
         <p className="rounded-2xl bg-sun/30 px-3 py-2 text-sm text-ink/80">
-          Earn stars by being a great student: lesson +{STAR_RULES.lesson}, goal +{STAR_RULES.goal}, report card A/B/C +{STAR_RULES.grade.A}/+
+          Earn stars by being a great student: lecture +{STAR_RULES.lesson}, goal +{STAR_RULES.goal}, report card A/B/C +{STAR_RULES.grade.A}/+
           {STAR_RULES.grade.B}/+{STAR_RULES.grade.C}, sports win +{STAR_RULES.sportWin}, game win +{STAR_RULES.gameWin}, helping or sharing +
-          {STAR_RULES.friendAct}, daily visit +{STAR_RULES.streak}. Getting caught: {STAR_RULES.caught}. <b>Resets every Monday</b> — anyone can win!
+          {STAR_RULES.friendAct}, daily visit +{STAR_RULES.streak}, new level +{STAR_RULES.levelUp}, graduating +{STAR_RULES.graduated}, promotion at
+          work +{STAR_RULES.promotion}. Getting caught: {STAR_RULES.caught}. <b>Resets every Monday</b> — anyone can win!
         </p>
       )}
       <ol className="flex flex-col gap-1.5">
@@ -81,7 +90,7 @@ export function LeaderboardSheet() {
             </span>
             <LookAvatar look={r.look} size={36} />
             <span className="min-w-0 flex-1 truncate text-base font-extrabold text-ink">{r.name}</span>
-            <span className="shrink-0 text-sm font-black text-brand">{show(r.value)}</span>
+            <span className="shrink-0 text-sm font-black text-brand">{board === "uni" ? uniLabel(r.uni) : show(r.value)}</span>
           </li>
         ))}
       </ol>
@@ -93,7 +102,9 @@ export function LeaderboardSheet() {
 /** "Come back tomorrow" reward card, shown once a day on arrival. */
 export function StreakCard() {
   const card = useLifeStore((s) => s.streakCard);
-  if (!card) return null;
+  // Wait until a new student has picked their course.
+  const pickingCourse = useLifeStore((s) => s.hud !== null && s.hud.uni === null);
+  if (!card || pickingCourse) return null;
   const close = () => useLifeStore.getState().patch({ streakCard: null });
   return (
     <div className="absolute inset-0 z-40 grid place-items-center bg-ink/50 p-4" role="dialog" aria-modal="true" aria-labelledby="streak-title">

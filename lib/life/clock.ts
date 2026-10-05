@@ -11,9 +11,9 @@ export type Period = { key: string; kind: PeriodKind; name: string; start: numbe
 /** Seconds into the 10-minute day. */
 export const PERIODS: Period[] = [
   { key: "assembly", kind: "assembly", name: "Morning Assembly", start: 0, end: 45 },
-  { key: "lesson1", kind: "lesson", name: "Lesson 1", start: 45, end: 195 },
+  { key: "lesson1", kind: "lesson", name: "Lecture 1", start: 45, end: 195 },
   { key: "break", kind: "break", name: "Break Time", start: 195, end: 285 },
-  { key: "lesson2", kind: "lesson", name: "Lesson 2", start: 285, end: 435 },
+  { key: "lesson2", kind: "lesson", name: "Lecture 2", start: 285, end: 435 },
   { key: "after", kind: "after", name: "After School", start: 435, end: 555 },
   { key: "home", kind: "home", name: "Home Time", start: 555, end: 600 },
 ];

@@ -21,11 +21,12 @@ import { WalletSheet, type WalletTab } from "./WalletSheet";
 import { MapSheet } from "./MapSheet";
 import { HomeSheet } from "./HomeSheet";
 import { FoodSheet } from "./FoodSheet";
+import { CelebrationCard, CoursePicker, ReportUni, standingLabel, StudiesSheet } from "./StudiesSheet";
 import { EventsList, LeaderboardSheet, StreakCard } from "./Community";
 import { SportsSheet } from "./SportsSheet";
 import { WardrobeSheet } from "./WardrobeSheet";
 
-type Sheet = { kind: "goals" } | { kind: "wallet"; tab?: WalletTab; to?: string } | { kind: "chat"; thread?: string } | { kind: "games" } | { kind: "sports" } | { kind: "map" } | { kind: "home"; mode: "home" | "furniture" } | { kind: "leaderboard" } | { kind: "food" } | { kind: "events" } | { kind: "wardrobe" } | { kind: "people" } | { kind: "menu" } | { kind: "talk"; id: string } | null;
+type Sheet = { kind: "goals" } | { kind: "wallet"; tab?: WalletTab; to?: string } | { kind: "chat"; thread?: string } | { kind: "games" } | { kind: "sports" } | { kind: "map" } | { kind: "home"; mode: "home" | "furniture" } | { kind: "leaderboard" } | { kind: "food" } | { kind: "studies" } | { kind: "events" } | { kind: "wardrobe" } | { kind: "people" } | { kind: "menu" } | { kind: "talk"; id: string } | null;
 
 const NEEDS: { key: NeedKey; emoji: string; label: string }[] = [
   { key: "energy", emoji: "⚡", label: "Energy" },
@@ -105,9 +106,15 @@ function Hud({ hud, onOpen }: { hud: LifeHud; onOpen: (sheet: Sheet) => void }) 
         {NEEDS.map((n) => (
           <NeedBar key={n.key} value={hud.needs[n.key]} emoji={n.emoji} label={n.label} />
         ))}
-        <span className="shrink-0 rounded-lg bg-brand/10 px-2 py-0.5 text-sm font-black text-brand" title={`Today's grade (${hud.gradePoints} points)`}>
+        <button
+          type="button"
+          onClick={() => onOpen({ kind: "studies" })}
+          className="shrink-0 rounded-lg bg-brand/10 px-2 py-0.5 text-sm font-black text-brand"
+          aria-label={`My studies. Today's grade ${hud.gradePoints > 0 ? hud.grade : "not yet"}${hud.uni ? `, ${hud.uni.graduated ? "graduate" : `${hud.uni.level} Level`}` : ""}`}
+        >
           📝 {hud.gradePoints > 0 ? hud.grade : "–"}
-        </span>
+          {hud.uni && <span className="hidden sm:inline"> · {hud.uni.graduated ? "🎓 Grad" : `${hud.uni.level}L`}</span>}
+        </button>
       </div>
       <div className="flex gap-1.5 [&>button]:shrink-0 [&>button]:whitespace-nowrap">
         <button
@@ -283,8 +290,8 @@ function PeopleSheet({ onTalk }: { onTalk: (id: string) => void }) {
                 {r.name}
               </p>
               <p className="text-sm text-ink/60">
-                {"❤️".repeat(lvl.hearts)} {lvl.name}
-                {r.online ? " · at school" : ""}
+                {"❤️".repeat(lvl.hearts)} {lvl.name} · {standingLabel(r.stats?.uni)}
+                {r.online ? " · online" : ""}
               </p>
             </div>
             {r.nearby && (
@@ -379,6 +386,7 @@ function MenuSheet({ onClose, onOpen }: { onClose: () => void; onOpen: (sheet: S
   const [muted, toggleMuted] = useMuted();
   const me = useLifeStore((s) => s.me);
   const streak = useLifeStore((s) => s.hud?.streak ?? null);
+  const uni = useLifeStore((s) => s.hud?.uni ?? null);
   const router = useRouter();
   const [copied, setCopied] = useState(false);
   const item = "flex min-h-14 w-full items-center gap-3 rounded-2xl bg-ink/5 px-4 text-left text-lg font-bold text-ink active:bg-sun/40";
@@ -406,6 +414,10 @@ function MenuSheet({ onClose, onOpen }: { onClose: () => void; onOpen: (sheet: S
           🔥 {streak.count}-day streak <span className="text-sm font-semibold text-ink/60">· best {streak.best}</span>
         </p>
       )}
+      <button type="button" className={item} onClick={() => onOpen({ kind: "studies" })}>
+        <span aria-hidden>🎓</span> My studies
+        {uni && <span className="ml-auto text-sm font-bold text-brand">{uni.graduated ? "Graduate" : `${uni.level} Level`}</span>}
+      </button>
       <button type="button" className={item} onClick={() => onOpen({ kind: "leaderboard" })}>
         <span aria-hidden>🏆</span> Leaderboard
       </button>
@@ -417,11 +429,14 @@ function MenuSheet({ onClose, onOpen }: { onClose: () => void; onOpen: (sheet: S
       </button>
       <div className="rounded-2xl bg-ink/5 p-3 text-sm text-ink/70">
         <p className="mb-1 font-bold text-ink">How to play</p>
-        Walk to a sign to do an activity. Keep your ⚡🍛😄🤝 bars up and attend lessons for good grades. You get
-        pocket money every morning; earn more from part-time jobs, goals and good report cards, and save some to
-        earn interest. Feeling naughty? Phones and snacks in class, copying homework or skipping class are fun —
-        but a prefect might catch you (fines, lost grades or detention). Catch the 🚌 bus at the Front Yard to go to town: your home and pet, the market, the bukka,
-        the football park and more. A school day lasts 10 minutes; come back every day for streak rewards.
+        Walk to a sign to do an activity. Keep your ⚡🍛😄🤝 bars up and attend lectures for good grades: each
+        day&apos;s report card is a result towards your CGPA, and passing days moves you from 100 Level up to 400
+        Level and graduation. Graduates work at the Office Complex in town for a salary and promotions. Students get
+        pocket money every morning; earn more from part-time jobs, goals and good results, and save some to earn
+        interest. Feeling naughty? Phones and snacks in class, copying homework or skipping class are fun — but you
+        might get caught (fines, lost grades or detention). Catch the 🚌 bus at the Front Yard to go to town: your
+        home and pet, the Food Court, the football park and more. A day lasts 10 minutes; come back every day for
+        streak rewards.
       </div>
       <button
         type="button"
@@ -451,8 +466,9 @@ function ReportCardModal() {
         <h2 id="report-title" className="mt-1 text-2xl font-black text-brand">
           Report card
         </h2>
-        <p className="text-base text-ink/60">The school day is over. Here&apos;s how you did:</p>
+        <p className="text-base text-ink/60">Lectures are over for today. Here&apos;s your result:</p>
         <div className="my-4 grid grid-cols-2 gap-2">
+          {report.uni && <ReportUni uni={report.uni} />}
           <div className="rounded-2xl bg-sky p-3">
             <p className="text-xs font-bold text-ink/60">Grade</p>
             <p className="text-4xl font-black text-brand">{report.grade}</p>
@@ -618,6 +634,11 @@ export function LifeGame() {
           <HomeSheet mode={sheet.mode} />
         </BottomSheet>
       )}
+      {sheet?.kind === "studies" && (
+        <BottomSheet title="My studies" onClose={close}>
+          <StudiesSheet />
+        </BottomSheet>
+      )}
       {sheet?.kind === "food" && (
         <BottomSheet title="Food Court" onClose={close}>
           <FoodSheet onOrdered={close} />
@@ -673,6 +694,8 @@ export function LifeGame() {
       <GameInviteCard />
       <ReportCardModal />
       <StreakCard />
+      <CelebrationCard />
+      <CoursePicker />
     </div>
   );
 }

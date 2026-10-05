@@ -1,14 +1,16 @@
 // Ten-ten between two classmates: a challenge, both play, both see the same result.
-import { TIME, check, joinSchool, newContext, newPage, resultText, run, startSchool, walkToSign } from "../lib.mjs";
+import { TIME, check, joinSchool, newContext, newPage, resultText, run, setTimeOfDay, startSchool, walkToSign } from "../lib.mjs";
 
 await run(async (browser) => {
-  const ctx = await newContext(browser, { secondsIntoDay: TIME.afterSchool - 3 });
+  // Set up during break (ten-ten is open then too), then jump to after school for the match.
+  const ctx = await newContext(browser, { secondsIntoDay: TIME.break });
   const a = await newPage(ctx, "A");
   const code = await startSchool(a, { name: "Ada" });
   const venue = await walkToSign(a, "👣", /Play ten-ten/);
   const b = await newPage(ctx, "B");
   await joinSchool(b, code, { name: "Bayo" });
 
+  await setTimeOfDay(ctx, TIME.afterSchool);
   await a.bringToFront();
   await venue.click();
   await a.getByRole("button", { name: "Challenge" }).click();

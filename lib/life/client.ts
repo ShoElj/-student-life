@@ -73,12 +73,26 @@ import {
 import type { Classmate, LifeProfile, SocialKind } from "./types";
 import { isOwned, randomStarterLook, sanitizeLook, type WardrobeItem } from "./wardrobe";
 import { maskRudeWords } from "@/lib/moderation";
+import {
+  chooseCourse,
+  courses,
+  jobFor,
+  lectureFor,
+  sanitizeUni,
+  uniSummary,
+  type CourseKey,
+  type UniSummary,
+} from "./university";
 
 const SESSION_KEY = "sbb-life-session";
 const SAVE_EVERY_MS = 10_000;
 const PRESENCE_MOVING_MS = 160;
 const PRESENCE_IDLE_MS = 2_000;
-const CLASSMATE_TIMEOUT_MS = 8_000;
+/**
+ * A classmate who has gone quiet for this long has left (closing the tab says so at once). Long
+ * enough that glancing at another app on a phone doesn't end a match.
+ */
+const CLASSMATE_TIMEOUT_MS = 20_000;
 const ROSTER_REFRESH_MS = 60_000;
 const HUD_EVERY_MS = 200;
 const BUBBLE_MS = 3_000;
@@ -214,6 +228,7 @@ function normaliseProfile(studentId: string, raw: LifeProfile | null): LifeProfi
     day,
     world: isWorldKey(raw.world) ? raw.world : "school",
     home: sanitizeHome(raw.home) ?? newHome(),
+    uni: sanitizeUni(raw.uni),
     streak:
       raw.streak && typeof raw.streak.lastDate === "string"
         ? { count: money(raw.streak.count), lastDate: raw.streak.lastDate, best: money(raw.streak.best) }
@@ -236,8 +251,25 @@ function isLesson(key: string): boolean {
 
 function rosterStats(s: RosterStudent): RosterStats {
   const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.max(0, v) : 0);
-  const stats = (s.stats ?? {}) as { sportsWins?: unknown; stars?: unknown; starsWeek?: unknown };
-  return { stars: starsThisWeek(stats, Date.now()), level: level(num(s.xp)), savings: num(s.savings), sportsWins: num(stats.sportsWins), roomValue: roomValue(sanitizeHome(s.home)) };
+  const stats = (s.stats ?? {}) as { sportsWins?: unknown; stars?: unknown; starsWeek?: unknown; uni?: unknown };
+  return {
+    stars: starsThisWeek(stats, Date.now()),
+    level: level(num(s.xp)),
+    savings: num(s.savings),
+    sportsWins: num(stats.sportsWins),
+    roomValue: roomValue(sanitizeHome(s.home)),
+    uni: rosterUni(stats.uni),
+  };
+}
+
+/** A classmate's course and level as they shared it (checked, since it comes from their device). */
+function rosterUni(raw: unknown): UniSummary | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const r = raw as Partial<UniSummary>;
+  const uni = sanitizeUni({ course: r.course, level: r.level, totalPoints: 0, daysCounted: 0, graduated: r.degree ? { cgpa: r.cgpa, at: 0 } : undefined });
+  if (!uni) return undefined;
+  const cgpa = typeof r.cgpa === "number" && Number.isFinite(r.cgpa) ? Math.min(5, Math.max(0, r.cgpa)) : 0;
+  return { course: uni.course, level: uni.level, cgpa, degree: uni.graduated?.degree, job: typeof r.job === "string" ? r.job.slice(0, 40) : undefined };
 }
 
 export class LifeClient {
@@ -426,7 +458,7 @@ export class LifeClient {
       switch (e.kind) {
         case "period_changed":
           playSound("break-bell");
-          store.toast(`🔔 ${e.period.name}${e.period.kind === "lesson" ? ` — ${getSchoolTime().subject}` : ""}`, "info");
+          store.toast(`🔔 ${e.period.name}${e.period.kind === "lesson" ? ` — ${this.lectureNow()}` : ""}`, "info");
           break;
         case "activity_done": {
           const def = getActivity(e.key);
@@ -470,6 +502,42 @@ export class LifeClient {
           playSound("bus");
           store.toast(e.world === "town" ? "🚌 Welcome to town! Visit your home, the Food Court and the football park." : "🚌 Back at school!", "info");
           this.sendPresence(true);
+          void this.save(true);
+          break;
+        case "level_up": {
+          const course = courses[e.course];
+          playSound("winner");
+          vibrate([30, 40, 30]);
+          store.patch({
+            celebration: {
+              emoji: "🎉",
+              title: `Welcome to ${e.level} Level!`,
+              text: `You passed ${e.level - 100} Level in ${course.name}. New courses start tomorrow.`,
+              lines: course.lectures[e.level as keyof typeof course.lectures].map((t) => `📘 ${t}`),
+            },
+          });
+          void this.save(true);
+          break;
+        }
+        case "graduated": {
+          const course = courses[e.course];
+          const job = jobFor(this.sim.profile.uni);
+          playSound("winner");
+          vibrate([40, 60, 40, 60, 40]);
+          store.patch({
+            celebration: {
+              emoji: "🎓",
+              title: "You graduated!",
+              text: `B.Sc. ${course.name} — ${e.degree} (CGPA ${e.cgpa.toFixed(2)}). Your family sent ${formatMoney(e.gift)} to celebrate!`,
+              lines: job ? [`💼 Your first job: ${job.title} at the ${job.employer}`, `💵 ${formatMoney(job.pay)} a shift · Office Complex, in town`] : [],
+            },
+          });
+          void this.save(true);
+          break;
+        }
+        case "job_promotion":
+          playSound("winner");
+          store.patch({ celebration: { emoji: "📈", title: "You got promoted!", text: `You're now ${e.title}. Pay: ${formatMoney(e.pay)} a shift.` } });
           void this.save(true);
           break;
         case "streak":
@@ -548,7 +616,7 @@ export class LifeClient {
         clockLabel: time.clockLabel,
         periodName: time.period.name,
         periodKind: time.period.kind,
-        subject: time.subject,
+        subject: time.period.kind === "lesson" ? this.lectureNow() : null,
         secondsLeftInPeriod: time.secondsLeftInPeriod,
         goals: day.goals.map((g) => {
           const def = getGoal(g.id);
@@ -572,7 +640,7 @@ export class LifeClient {
                 emoji: spotDef.emoji,
                 durationSec: spotDef.durationSec,
                 cost: priceOf(spotDef, now),
-                pay: payFor(spotDef, sim, this.classmates.size, now),
+                pay: spotDef.key === "career_work" ? (jobFor(sim.profile.uni)?.pay ?? 0) : payFor(spotDef, sim, this.classmates.size, now),
                 opens: spotDef.opens ?? null,
                 risky: Boolean(spotDef.risk),
                 blocker: activityBlocker(sim, spotDef, now),
@@ -586,6 +654,8 @@ export class LifeClient {
         home: sim.profile.home ?? null,
         detentionLeft: Math.max(0, Math.ceil((sim.detainedUntil - now) / 1000)),
         caughtToday: day.counters.caught ?? 0,
+        uni: sim.profile.uni ?? null,
+        job: jobFor(sim.profile.uni),
     };
     // Only re-render the screen when something visible changed.
     const key = JSON.stringify([hud, roster]);
@@ -599,6 +669,27 @@ export class LifeClient {
   // -------------------------------------------------------------------------
   // Player actions
   // -------------------------------------------------------------------------
+
+  /** Today's lecture for my course and level, e.g. "CSC 201 · Data Structures". */
+  private lectureNow(): string | null {
+    const time = getSchoolTime();
+    return lectureFor(this.sim.profile.uni, time.period.key) ?? time.subject;
+  }
+
+  /** Picks a course (new students, and anyone from before the university update). */
+  chooseCourse(course: CourseKey): boolean {
+    const store = useLifeStore.getState();
+    const result = chooseCourse(this.sim.profile, course);
+    if (!result.ok) {
+      store.toast(result.reason, "bad");
+      return false;
+    }
+    playSound("chime");
+    store.toast(`${courses[course].emoji} Welcome to ${courses[course].name}! You're in 100 Level.`, "good");
+    void this.save(true);
+    this.publishHud(Date.now());
+    return true;
+  }
 
   /** Orders a dish at the Food Court. */
   orderMeal(key: string): boolean {
@@ -1395,7 +1486,9 @@ export class LifeClient {
     const key = `${sim.world},${Math.round(sim.x)},${Math.round(sim.y)},${sim.facing},${sim.activity?.key ?? this.playingActivity() ?? ""}`;
     const now = Date.now();
     const changed = key !== this.lastPresenceKey;
-    if (!force && now - this.lastPresence < (changed ? PRESENCE_MOVING_MS : PRESENCE_IDLE_MS)) return;
+    const since = now - this.lastPresence;
+    // (If the device clock jumped backwards, send now rather than going quiet until it catches up.)
+    if (!force && since >= 0 && since < (changed ? PRESENCE_MOVING_MS : PRESENCE_IDLE_MS)) return;
     this.lastPresence = now;
     this.lastPresenceKey = key;
     this.send("life_state", {
@@ -1517,6 +1610,9 @@ export class LifeClient {
     if (this.saving && !force) return;
     this.saving = true;
     this.lastSave = Date.now();
+    // Share my course and level with classmates (they can only see stats).
+    const stats = (this.sim.profile.stats ??= { sportsWins: 0, gamesWins: 0 });
+    stats.uni = uniSummary(this.sim.profile.uni);
     const profile: LifeProfile = JSON.parse(JSON.stringify(this.sim.profile));
     this.session.profile = profile;
     storeSession(this.session);

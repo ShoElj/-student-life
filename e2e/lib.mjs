@@ -35,14 +35,28 @@ export async function launch() {
   return chromium.launch({ executablePath });
 }
 
+const dayStart = new WeakMap();
+
 /** A browser context, optionally with the clock set to a time of the school day. */
 export async function newContext(browser, { secondsIntoDay, ...options } = {}) {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, ...options });
+  // A modest window: the test machine draws the game in software, and two game tabs at a large
+  // size can starve it.
+  const ctx = await browser.newContext({ viewport: { width: 960, height: 640 }, ...options });
   if (secondsIntoDay !== undefined) {
-    await ctx.clock.install({ time: Math.floor(Date.now() / DAY_MS) * DAY_MS + secondsIntoDay * 1000 });
+    const start = Math.floor(Date.now() / DAY_MS) * DAY_MS;
+    dayStart.set(ctx, start);
+    await ctx.clock.install({ time: start + secondsIntoDay * 1000 });
     await ctx.clock.resume();
   }
   return ctx;
+}
+
+/**
+ * Moves the clock forward to a time of the same school day (setting up a test can take a while).
+ * Only ever forward: like a real clock going backwards, it would confuse the game's timers.
+ */
+export async function setTimeOfDay(ctx, secondsIntoDay) {
+  await ctx.clock.setSystemTime(dayStart.get(ctx) + secondsIntoDay * 1000);
 }
 
 /** A new tab that reports page errors and closes the "welcome back" and report cards whenever they show. */
@@ -65,7 +79,7 @@ export async function newPage(ctx, tag = "page") {
 }
 
 /** Starts a new School Life school. Returns its 6-letter code. */
-export async function startSchool(page, { school = "Unity High", name = "Ada", pin = "1234" } = {}) {
+export async function startSchool(page, { school = "Unity High", name = "Ada", pin = "1234", course = "Computer Science" } = {}) {
   await page.goto(`${BASE}/life`);
   await page.getByRole("tab", { name: "Start a school" }).click();
   await page.getByLabel("School name").fill(school);
@@ -74,18 +88,31 @@ export async function startSchool(page, { school = "Unity High", name = "Ada", p
   await page.getByRole("button", { name: "Start my school" }).click();
   await page.waitForURL(/\/life\/[A-Z0-9]{6}$/);
   await page.getByRole("button", { name: "Map" }).waitFor();
+  await pickCourse(page, course);
   await page.waitForTimeout(1200);
   return page.url().slice(-6);
 }
 
+/** New students choose a course first (it starts them in 100 Level). */
+export async function pickCourse(page, course = "Computer Science") {
+  const picker = page.getByRole("dialog", { name: "Choose your course" });
+  if (!(await picker.waitFor({ timeout: 5000 }).then(() => true, () => false))) return;
+  await picker.getByRole("radio", { name: new RegExp(course) }).click();
+  await picker.getByRole("button", { name: `Study ${course}` }).click();
+  // Polled rather than waited on, so closing the welcome card that follows can't hold it up.
+  for (let i = 0; i < 30 && (await picker.count()); i++) await page.waitForTimeout(500);
+  if (await picker.count()) throw new Error("The course picker didn't close");
+}
+
 /** Joins an existing school as another student. */
-export async function joinSchool(page, code, { name = "Bayo", pin = "4321" } = {}) {
+export async function joinSchool(page, code, { name = "Bayo", pin = "4321", course = "Accounting" } = {}) {
   await page.goto(`${BASE}/life?code=${code}`);
   await page.getByLabel("Your name").fill(name);
   await page.getByLabel("Secret PIN (4 numbers)").fill(pin);
   await page.getByRole("button", { name: "Go to school" }).click();
   await page.waitForURL(new RegExp(`/life/${code}$`));
   await page.getByRole("button", { name: "Map" }).waitFor();
+  await pickCourse(page, course);
   await page.waitForTimeout(1500);
 }
 
@@ -152,7 +179,7 @@ export async function run(body) {
   } catch (e) {
     for (const ctx of browser.contexts()) for (const p of ctx.pages()) await p.screenshot({ path: join(OUT, `crash-${Date.now()}.png`) }).catch(() => {});
     // The first line says what failed; Playwright's call log says what it was waiting for.
-    const lines = (e instanceof Error ? e.message : String(e)).split("\n").map((l) => l.trim());
+    const lines = (e instanceof Error ? e.message : String(e)).replace(/\x1b\[[0-9;]*m/g, "").split("\n").map((l) => l.trim());
     check(false, "test ran to the end", [lines[0], ...lines.filter((l) => /^- waiting for/.test(l)).slice(0, 1)].join(" "));
   }
   await finish(browser);

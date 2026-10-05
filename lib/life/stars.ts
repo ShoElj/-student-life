@@ -1,7 +1,8 @@
 /**
  * Star points: the main weekly leaderboard. Stars reward being a good all-round student (lessons,
- * goals, good grades, sport, games, kindness and coming back) rather than hoarding money, and
- * every Monday the board starts fresh so new players can still reach the top.
+ * goals, good grades, moving up a level, graduating, work promotions, sport, games, kindness
+ * and coming back) rather than hoarding money, and every Monday the board starts fresh so new
+ * players can still reach the top.
  */
 import type { LifeEvent } from "./sim";
 import type { LifeProfile } from "./types";
@@ -15,6 +16,9 @@ export const STAR_RULES = {
   friendAct: 2,
   streak: 3,
   caught: -2,
+  levelUp: 10,
+  graduated: 20,
+  promotion: 5,
 } as const;
 
 /** The Monday (UTC) that starts this week, like "2026-09-28". */
@@ -53,6 +57,12 @@ export function starsForEvent(e: LifeEvent, isLesson: (key: string) => boolean):
       return STAR_RULES.streak;
     case "caught":
       return STAR_RULES.caught;
+    case "level_up":
+      return STAR_RULES.levelUp;
+    case "graduated":
+      return STAR_RULES.graduated;
+    case "job_promotion":
+      return STAR_RULES.promotion;
     default:
       return 0;
   }

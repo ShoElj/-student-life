@@ -8,8 +8,8 @@ await run(async (browser) => {
   const shed = await walkToSign(a, "🙈", /Skip class/);
   check((await shed.innerText()).includes("might get caught"), "the sign warns you might get caught");
   await shed.click();
-  const outcome = a.getByText(/Got away with it|A prefect found you/).first();
+  const outcome = a.getByText(/Got away with it|Campus security found you/).first();
   check(await outcome.waitFor({ timeout: 30_000 }).then(() => true, () => false), "skipping class ends in getting away with it or getting caught");
-  const caught = /prefect/i.test(await outcome.innerText().catch(() => ""));
+  const caught = /security/i.test(await outcome.innerText().catch(() => ""));
   if (caught) check((await a.getByText("🚨 Detention").count()) > 0, "getting caught shows detention");
 });

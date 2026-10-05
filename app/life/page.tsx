@@ -204,8 +204,8 @@ function LifeLanding() {
         <span className="rounded-full bg-leaf/15 px-4 py-1.5 text-sm font-extrabold tracking-wide text-leaf-dark uppercase">New · Student Life</span>
         <h1 className="mt-3 text-4xl font-black text-brand">Live the student life</h1>
         <p className="mt-2 text-lg text-ink/75">
-          Go to lessons, eat at the canteen, play football with friends, keep your energy up, work part-time jobs to earn money, and save up for new outfits.
-          Start a school and everyone you invite lives in it with you.
+          Pick a course and study from 100 Level to 400 Level: go to lectures, eat at the canteen, play football with friends, work part-time
+          jobs, then graduate and start your career in town. Start a school and everyone you invite lives in it with you.
         </p>
       </div>
 

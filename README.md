@@ -30,6 +30,16 @@ Salon**, **Supermarket & Furniture**, **Viewing Centre**, **Town Bank**, **Marke
 a stall to work at), **Mama's Bukka**, **Football Park** and the **Church & Mosque Square**. The bus
 in the Bus Park takes you back. The town never closes.
 
+**University:** each student picks a course (Computer Science, Accounting, Mass Communication,
+Economics, Microbiology or Business Administration) and starts in **100 Level**. Lectures are named
+by course code (e.g. *CSC 201 · Data Structures*). Each day's report card is a result on the
+Nigerian 5-point scale (A = 5 … F = 0) that counts towards a **CGPA**; passing 3 days (E or better)
+moves you up a level. After 400 Level you **graduate** with a degree class (First Class, Second Class
+Upper/Lower, Third Class or Pass) and a ₦5,000 gift from family. Graduates stop getting pocket money
+and instead work at the **Office Complex** in town (south of the Bus Park) in a job that fits their
+course; pay depends on the degree class and grows with promotions. "My studies" (tap the 📝 grade
+chip or the menu) shows your level, CGPA, results and job.
+
 **Coming back every day:**
 - **Daily streak:** the first visit each calendar day pays a bonus that grows every day in a row
   (₦200, ₦400 … ₦1,400, plus ₦1,000 on every 7th day).
